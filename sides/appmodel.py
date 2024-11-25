@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+
 from MyString import MyString
 
 
@@ -26,6 +27,10 @@ class IStringHandler(ABC):
 
     @abstractmethod
     def erase(self, index, count):
+        pass
+
+    @abstractmethod
+    def find(self, in_str: str, index: int):
         pass
 
 
@@ -63,6 +68,9 @@ class MyStringHandler(IStringHandler):
     def erase(self, index, count):
         return self._obj.erase(index, count)
 
+    def find(self, in_str: str, index: int):
+        return self._obj.find(in_str, index)
+
 
 class ModelFileSubSystemBase(ABC):
 
@@ -94,6 +102,10 @@ class ModelStrSubSystemBase(ABC):
 
     @abstractmethod
     def erase_word_diw_spec(self, row: int, col) -> None:
+        pass
+
+    @abstractmethod
+    def find_to(self, *args, **kwargs):
         pass
 
 
@@ -198,10 +210,38 @@ class ModelStrSubSystemDefault(ModelStrSubSystemBase):
         s.erase(left_ind, dif)
         self._base.buffer[row] = s
 
+    def get_end_of_str(self, row: int) -> int:
+        return self._base.buffer[row].size() - 1
+
+    def find_to(self, start_row: int, start_col: int, in_str: str, direction: str) -> tuple[int, int]:
+        buf = self._base.buffer
+        ind = -1
+        line_number = -1
+
+        edge = len(buf)
+        shift = 1
+
+        if direction == "TOP":
+            edge = 0
+            shift = -1
+
+        for i in range(start_row, edge, shift):
+            line = buf[i]
+            if i == start_row:
+                ind = line.find(in_str, start_col)
+            else:
+                ind = line.find(in_str, 0)
+
+            if not (ind == -1):
+                line_number = i
+                break
+
+        return line_number, ind
+
 
 class ModelDefault(ModelBase):
     _file_sub_sys: ModelFileSubSystemBase
-    _str_sub_sys: ModelStrSubSystemDefault
+    _str_sub_sys: ModelStrSubSystemBase
     _filename: str = None
     _mode: str = None
     _string_handler = None
@@ -214,11 +254,6 @@ class ModelDefault(ModelBase):
         self._str_sub_sys = ModelStrSubSystemDefault(self)
 
         self._buffer = self._file_sub_sys.get_from(filename)
-
-    def tmpmet(self):
-        [print(t.data()) for t in self._buffer]
-        self._str_sub_sys.erase_word_diw_spec(1, 3)
-        [print(t.data()) for t in self._buffer]
 
     @property
     def str_sub_sys(self):
@@ -250,8 +285,10 @@ class ModelDefault(ModelBase):
     def get_statusbar_info(self):
         pass
 
-
 # d = [MyString("3i3i3i3i3i\n"), MyString("ksjsfjjfgsj")]
 # m = ModelFileSubSystemDefault()
 # m.load_to("file3", d)
-m = ModelDefault("file3")
+
+# s = MyString("123123TYU93939")
+# print(s.find("8"))
+# # FIX FIND

@@ -94,11 +94,11 @@ class AppDefault(AppBase):
 
             '''
             
-            view.display()
+            self.view.display()
             
-            self.controller.get_command().exec()
+            self.controller.process_input()
             
-            
+            ???
             
             '''
             pass
