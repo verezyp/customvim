@@ -1,11 +1,10 @@
 from abc import ABC, abstractmethod
 
-import cursesadapt
-from appmodel import *
-from appview import *
-from appcommands import *
-from cursesadapt import *
-from appclipmod import *
+from .appmodel import *
+from .appview import *
+from .appcommands import *
+from .cursesadapt import *
+from .appclipmod import *
 
 
 class ControllerBase(ABC):
@@ -19,6 +18,7 @@ class ControllerDefault(ControllerBase):
     _mode: str = "NAVI"
     _to_exec: list[CommandBase]
     _clipboard: ClipBoardBase
+    _last_search: CommandBase
 
     def __init__(self, model: ModelBase, view: ViewBase):
         self._model_inst = model
@@ -99,15 +99,55 @@ class ControllerDefault(ControllerBase):
 
             case "p":
                 self._to_exec.append(PasteCurPos(self._view_inst.cursor, self._model_inst, self._clipboard))
+            case "n":
+                self._to_exec.append(self._last_search)
+            case "N":
+                dir = ""
+                if self._last_search.direction == "TOP":
+                    dir = "BOT"
+                elif self._last_search.direction == "BOT":
+                    dir = "TOP"
+                self._to_exec.append(
+                    SearchStrFromCurTo(dir, self._last_search.text, self._view_inst.cursor,
+                                       self._model_inst))
+                self._last_search = self._to_exec[-1]
+
+    def search_handle(self, key):
+
+        if not self.validate_symbol(key):
+            return None
+
+        text = ""
+
+        direction = ""
+        if chr(key) == "/":
+            direction = "BOT"
+        elif chr(key) == "?":
+            direction = "TOP"
+
+        while True:
+            new_key = (self._view_inst.text_module.getch())
+            # print(new_key)
+            if new_key == 10:
+                self._to_exec.append(
+                    SearchStrFromCurTo(direction, text, self._view_inst.cursor, self._model_inst))
+                self._last_search = self._to_exec[-1]
+                break
+
+            elif self.validate_symbol(new_key):
+                text += chr(new_key)
+
+            else:
+                break
 
     def cursor_movement(self, key):
-        if key == cursesadapt.KEY_UP:
+        if key == KEY_UP:
             CursorMoveOneDefault("UP", self._view_inst.cursor).exec()
-        elif key == cursesadapt.KEY_DOWN:
+        elif key == KEY_DOWN:
             CursorMoveOneDefault("DOWN", self._view_inst.cursor).exec()
-        elif key == cursesadapt.KEY_LEFT:
+        elif key == KEY_LEFT:
             CursorMoveOneDefault("LEFT", self._view_inst.cursor).exec()
-        elif key == cursesadapt.KEY_RIGHT:
+        elif key == KEY_RIGHT:
             CursorMoveOneDefault("RIGHT", self._view_inst.cursor).exec()
         else:
             return 0
@@ -116,7 +156,11 @@ class ControllerDefault(ControllerBase):
     def mode_handle(self, key):
         if key == 27:  # ESC
             self._mode = "NAVI"
-            return None
+            return True
+        if self._mode == "NAVI" and (key == ord('/') or key == ord('?')):
+            self._mode = "SEARCH"
+            # print('///')
+            return True
 
     @staticmethod
     def validate_symbol(key):
@@ -138,25 +182,28 @@ class ControllerDefault(ControllerBase):
             return None
 
         self.mode_handle(key)
+        self._model_inst.mode = self._mode
+
+        self._view_inst.display()  # ?????
 
         match self._mode:
             case "NAVI":
                 self.navi_handle(key)
+            case "SEARCH":
+                self.search_handle(key)
             case "INPUT":
                 if self.validate_symbol(key):
                     self._to_exec.append(InsertDefault(chr(key), self._model_inst, self._view_inst.cursor))
                 elif key == 8:  # BACKSPACE
                     self._to_exec.append(EraseCharDefault(self._model_inst, self._view_inst.cursor))
         self._model_inst.mode = self._mode
-
         self.execute()
 
-
-if __name__ == '__main__':
-    m = ModelDefault("file3")
-    v = ViewDefault(m)
-    c = ControllerDefault(m, v)
-
-    while True:
-        v.display()
-        c.process()
+# if __name__ == '__main__':
+#     m = ModelDefault("file3")
+#     v = ViewDefault(m)
+#     c = ControllerDefault(m, v)
+#
+#     while True:
+#         v.display()
+#         c.process()

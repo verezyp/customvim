@@ -19,6 +19,7 @@ class AppHandler(AppHandlerBase):
         self._parser = ArgsParserDefault()
 
     def start(self):
-        app = self._builder.create(self._parser.get_filename())
-
+        # app = self._builder.create(self._parser.get_filename())
+        f_name = "C:\\testprog\\CUSTOMVIM\\vimmodules\sides\\file3"
+        app = self._builder.create(f_name)
         app.run()

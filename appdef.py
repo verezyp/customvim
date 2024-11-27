@@ -1,4 +1,13 @@
 from abc import ABC, abstractmethod
+from sides.appcontroller import ControllerDefault
+from sides.appmodel import ModelDefault
+from sides.appview import ViewDefault
+from sides import *
+from sides.cursesadapt import *
+from sides.appview import *
+from sides.appcontroller import *
+from sides.appmodel import *
+from sides.appcommands import *
 
 
 class AppBase(ABC):
@@ -87,21 +96,10 @@ class AppDefault(AppBase):
         self._controller = inst
 
     def run(self):
-        print(self.filename)
-        file = self.filename
-
         while True:
+            self._view.display()
 
-            '''
-            
-            self.view.display()
-            
-            self.controller.process_input()
-            
-            ???
-            
-            '''
-            pass
+            self.controller.process()
 
 
 class AppBuilderDefault(AppBuilderBase):
@@ -117,5 +115,8 @@ class AppBuilderDefault(AppBuilderBase):
 
     def create(self, f_name):
         app = AppDefault()
-        app.filename = f_name
+
+        app.model = ModelDefault(f_name)
+        app.view = ViewDefault(app.model)
+        app.controller = ControllerDefault(app.model, app.view)
         return app

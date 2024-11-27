@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from MyString import MyString
+from .MyString import MyString
 
 
 class IStringHandler(ABC):
@@ -249,7 +249,7 @@ class ModelStrSubSystemDefault(ModelStrSubSystemBase):
             edge = 0
             shift = -1
 
-        for i in range(start_row, edge, shift):
+        for i in range(start_row, edge + shift, shift):
             line = buf[i]
             if i == start_row:
                 ind = line.find(in_str, start_col)

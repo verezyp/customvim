@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
-from appmodel import ModelBase
-from appview import CursorBase
-from appclipmod import ClipBoardBase
+from .appmodel import ModelBase
+from .appview import CursorBase
+from .appclipmod import ClipBoardBase
 
 '''
 
@@ -177,15 +177,24 @@ class LoadToFileDefault(CommandBase):
 
 class SearchStrFromCurTo(CommandBase):  # ...
 
-    def __init__(self, direction: int, row: int, col: int, text: str, cursor: CursorBase, model: ModelBase):
-        self._row = row
-        self._col = col
+    def __init__(self, direction: str, text: str, cursor: CursorBase, model: ModelBase):
+        self._row, self._col = cursor.get_pos()
         self._text = text
         self._model = model
         self._dir = direction
         self._cursor = cursor
 
+    @property
+    def text(self):
+        return self._text
+
+    @property
+    def direction(self):
+        return self._dir
+
     def exec(self):
+        self._row, self._col = self._cursor.get_pos()
+        # print(self._row, self._col, self._text, self._dir)
         y, x = self._model.str_sub_sys.find_to(self._row, self._col, self._text, self._dir)
         self._cursor.move(y, x)
 

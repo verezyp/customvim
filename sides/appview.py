@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
-from cursesadapt import *
-from appmodel import *
+from .cursesadapt import *
+from .appmodel import *
 import os
 import ctypes
 
