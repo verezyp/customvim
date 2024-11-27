@@ -97,6 +97,10 @@ class ModelStrSubSystemBase(ABC):
         pass
 
     @abstractmethod
+    def make_empty(self, row):
+        pass
+
+    @abstractmethod
     def erase_chr(self, row: int, col: int) -> None:
         pass
 
@@ -106,6 +110,18 @@ class ModelStrSubSystemBase(ABC):
 
     @abstractmethod
     def find_to(self, *args, **kwargs):
+        pass
+
+    @abstractmethod
+    def viw_w(self, cur_y: int, cur_x: int) -> int:
+        pass
+
+    @abstractmethod
+    def viw_b(self, cur_y: int, cur_x: int) -> int:
+        pass
+
+    @abstractmethod
+    def get_word_at_index(self, row: int, col: int) -> str:
         pass
 
 
@@ -129,10 +145,6 @@ class ModelBase(ABC):
     def get_str(self, num: int):
         pass
 
-    @abstractmethod
-    def get_statusbar_info(self):
-        pass
-
     @buffer.setter
     @abstractmethod
     def buffer(self, value):
@@ -146,6 +158,15 @@ class ModelBase(ABC):
     @property
     @abstractmethod
     def file_sub_sys(self) -> ModelFileSubSystemBase:
+        pass
+
+    @property
+    @abstractmethod
+    def mode(self):
+        pass
+
+    @mode.setter
+    def mode(self, val):
         pass
 
 
@@ -183,6 +204,9 @@ class ModelStrSubSystemDefault(ModelStrSubSystemBase):
 
     def erase_full_str(self, row: int) -> None:
         self._base.buffer.pop(row)
+
+    def make_empty(self, row):
+        self._base.buffer[row].erase(0, self._base.buffer[row].size() - 1)
 
     def erase_chr(self, row: int, col: int) -> None:
         self._base.buffer[row].erase(col, 1)
@@ -238,6 +262,68 @@ class ModelStrSubSystemDefault(ModelStrSubSystemBase):
 
         return line_number, ind
 
+    def viw_w(self, cur_y: int, cur_x: int) -> int:
+        index = cur_x
+        text = self._base.get_str(cur_y)
+
+        n = len(text)
+        if index >= n - 1:
+            return n
+
+        while index < n and text[index].isalnum():
+            index += 1
+
+        while index < n and not text[index].isalnum():
+            index += 1
+
+        return index
+
+    def viw_b(self, cur_y: int, cur_x: int) -> int:
+        index = cur_x
+        text = self._base.get_str(cur_y)
+
+        if index <= 0:
+            return 0
+
+        index -= 1
+        while index > 0 and not text[index].isalnum():
+            index -= 1
+
+        while index > 0 and text[index - 1].isalnum():
+            index -= 1
+
+        return index
+
+    def get_word_at_index(self, row: int, col: int):
+        """
+        Возвращает слово, на котором находится символ с указанным индексом.
+
+        :param sentence: Строка, содержащая текст.
+        :param char_index: Индекс символа в строке.
+        :return: Слово, к которому относится символ, или сообщение об ошибке.
+        """
+        sentence = self._base.get_str(row)
+        char_index = col
+        # Проверяем, что индекс не выходит за пределы строки
+        if char_index < 0 or char_index >= len(sentence):
+            return "Индекс вне диапазона строки"
+
+        # Разбиваем строку на слова с их начальным и конечным индексами
+        words = sentence.split()
+        current_index = 0
+
+        for word in words:
+            word_start = current_index
+            word_end = current_index + len(word) - 1
+
+            if word_start <= char_index <= word_end:
+                return word
+
+            # Учитываем пробел после слова
+            current_index += len(word) + 1
+
+        return None
+
 
 class ModelDefault(ModelBase):
     _file_sub_sys: ModelFileSubSystemBase
@@ -254,6 +340,14 @@ class ModelDefault(ModelBase):
         self._str_sub_sys = ModelStrSubSystemDefault(self)
 
         self._buffer = self._file_sub_sys.get_from(filename)
+
+    @property
+    def mode(self):
+        return self._mode
+
+    @mode.setter
+    def mode(self, new_mode):
+        self._mode = new_mode
 
     @property
     def str_sub_sys(self):
@@ -281,9 +375,6 @@ class ModelDefault(ModelBase):
 
     def get_str(self, num: int):
         return self._buffer[num].data()
-
-    def get_statusbar_info(self):
-        pass
 
 # d = [MyString("3i3i3i3i3i\n"), MyString("ksjsfjjfgsj")]
 # m = ModelFileSubSystemDefault()

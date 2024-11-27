@@ -5,13 +5,6 @@ import os
 import ctypes
 
 
-class ViewBase(ABC):
-
-    @abstractmethod
-    def display(self):
-        pass
-
-
 class CursorBase(ABC):
 
     @abstractmethod
@@ -20,6 +13,27 @@ class CursorBase(ABC):
 
     @abstractmethod
     def get_pos(self) -> tuple[int, int]:
+        pass
+
+    @abstractmethod
+    def set_pos(self, y, x):
+        pass
+
+
+class ViewBase(ABC):
+
+    @abstractmethod
+    def display(self):
+        pass
+
+    @property
+    @abstractmethod
+    def text_module(self) -> ITextModule:
+        pass
+
+    @property
+    @abstractmethod
+    def cursor(self) -> CursorBase:
         pass
 
 
@@ -34,9 +48,22 @@ class CursorCursesDefault(CursorBase):
     def get_pos(self):
         return self._y, self._x
 
+    def set_pos(self, y, x):
+        self._y, self._x = y, x
+
     def move(self, y, x):
-        if y < 0 or y > len(self._model.buffer) - 1 or x > len(self._model.get_str(y)) or x < 0:
-            return
+        len_buf = len(self._model.buffer)
+        if y < 0 or y > len_buf - 1:
+            return None
+
+        len_str = len(self._model.get_str(y))
+
+        if x < 0:
+            return None
+
+        if x > len_str:
+            x = len_str - 1
+
         self._y = y
         self._x = x
         self._inst.cursor_move(y, x)
@@ -53,9 +80,17 @@ class ViewDefault(ViewBase):
         mod = CursesTextModule()
         self._text_module = mod
         self._model_inst = model
-        self.set_console_size(120, 30)
-        self._cursor_inst = CursorCursesDefault(mod, model)
+        self._set_console_size(120, 30)
         self.screen_configure()
+        self._cursor_inst = CursorCursesDefault(mod, model)
+
+    @property
+    def text_module(self):
+        return self._text_module
+
+    @property
+    def cursor(self) -> CursorBase:
+        return self._cursor_inst
 
     def screen_configure(self):
         screen = self._text_module
@@ -68,72 +103,53 @@ class ViewDefault(ViewBase):
         self._scr_top_str, self._scr_bot_str = top_val, bot_val
 
     @staticmethod
-    def set_console_size(width, height):
-        # Установить размер буфера
+    def _set_console_size(width, height):
         os.system(f"mode con: cols={width} lines={height}")
 
-        # Получить дескриптор консоли
         hwnd = ctypes.windll.kernel32.GetStdHandle(-11)  # STD_OUTPUT_HANDLE
 
-        # Задать размер окна консоли
-        rect = ctypes.create_string_buffer(22)  # Для хранения координат окна
+        rect = ctypes.create_string_buffer(22)
         ctypes.windll.kernel32.GetConsoleScreenBufferInfo(hwnd, rect)
 
-        # Получение размеров консоли (строки как байты)
         left, top, right, bottom = 0, 0, width - 1, height - 1
 
-        # Применяем размеры окна
         ctypes.windll.kernel32.SetConsoleWindowInfo(hwnd, True, ctypes.byref(
             (ctypes.c_short * 4)(left, top, right, bottom)
         ))
 
-    def display(self):  # 0 - 28 string +  last - status_bar (set_console_size(120, 30))
+    def display(self):  # 0 - 28 string + last - status_bar (set_console_size(120, 30))
 
         stdscr = self._text_module
 
-        while True:
-            cursor_y, cursor_x = self._cursor_inst.get_pos()
-            text_array = []
-            buf_size = len(self._model_inst.buffer)
+        cursor_y, cursor_x = self._cursor_inst.get_pos()
 
-            if buf_size < self._scr_bot_str:
-                self._scr_bot_str = buf_size - 1
+        main_text = []
+        buf_size = len(self._model_inst.buffer)
 
-            for i in range(buf_size):
-                text_array.append(self._model_inst.get_str(i))
+        if buf_size < self._scr_bot_str:
+            self._scr_bot_str = buf_size - 1
 
-            stdscr.clear_scr()
+        for i in range(buf_size):
+            main_text.append(self._model_inst.get_str(i))
 
-            max_y, max_x = stdscr.getmaxyx()
+        stdscr.clear_scr()
 
-            for idx, line in enumerate(text_array):
-                if idx >= max_y - 1:
-                    break
-                stdscr.add_str(idx, 0, line[:max_x - 1])
+        max_y, max_x = stdscr.getmaxyx()
 
-            status_bar = "'q' для выхода. FILE = {?}. MODE = <?>. POS = {?, ?}"
-            stdscr.add_str(max_y - 1, 0, status_bar[:max_x - 1])
+        for idx, line in enumerate(main_text):
+            if idx >= max_y - 1:
+                break
+            stdscr.add_str(idx, 0, line[:max_x - 1])
 
-            self._cursor_inst.move(cursor_y, cursor_x)
+        mode = self._model_inst.mode
+        file = self._model_inst.filename
+        amount = len(self._model_inst.buffer)
 
-            stdscr.refresh_scr()
+        status_bar = f"FILE: {file}. MODE: {mode}. CUR_STR: {cursor_y}. AMOUNT: {amount}"
+        stdscr.add_str(max_y - 1, 0, status_bar[:max_x - 1])
 
-            # key = stdscr.getch()
-            #
-            # if key == ord('q'):
-            #     break
-            #
-            # if key == curses.KEY_UP and cursor_y > 0:
-            #     cursor_y -= 1
-            # elif key == curses.KEY_DOWN and cursor_y < max_y - 2:
-            #     cursor_y += 1
-            # elif key == curses.KEY_LEFT and cursor_x > 0:
-            #     cursor_x -= 1
-            # elif key == curses.KEY_RIGHT and cursor_x < max_x - 2:
-            #     cursor_x += 1
+        self._cursor_inst.move(cursor_y, cursor_x)
 
-#
-# if __name__ == '__main__':
-#     m = ModelDefault("file3")
-#     v = ViewDefault(m)
-#     v.display()
+        self._cursor_inst.set_pos(cursor_y, cursor_x)
+
+        stdscr.refresh_scr()
