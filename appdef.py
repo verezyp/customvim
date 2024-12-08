@@ -1,13 +1,6 @@
-from abc import ABC, abstractmethod
-from sides.appcontroller import ControllerDefault
-from sides.appmodel import ModelDefault
-from sides.appview import ViewDefault
-from sides import *
-from sides.cursesadapt import *
-from sides.appview import *
-from sides.appcontroller import *
-from sides.appmodel import *
-from sides.appcommands import *
+from vimmodules.sides.myvimcontroller.appcontroller import *
+from vimmodules.sides.myvimmodel.appmodel import *
+from vimmodules.sides.myvimcontroller.appcommands import *
 
 
 class AppBase(ABC):
@@ -62,6 +55,8 @@ class AppDefault(AppBase):
         self._view = None
         self._controller = None
         self._filename = None
+        self._view_stat_bar = None
+        # v =
 
     @property
     def filename(self):
@@ -98,7 +93,7 @@ class AppDefault(AppBase):
     def run(self):
         while True:
             self._view.display()
-
+            self._view_stat_bar.display()
             self.controller.process()
 
 
@@ -115,8 +110,9 @@ class AppBuilderDefault(AppBuilderBase):
 
     def create(self, f_name):
         app = AppDefault()
-
+        v = ViewStatusBar(CursesTextModule())
         app.model = ModelDefault(f_name)
         app.view = ViewDefault(app.model)
-        app.controller = ControllerDefault(app.model, app.view)
+        app._view_stat_bar = v
+        app.controller = ControllerDefault(app.model, app.view, v)
         return app

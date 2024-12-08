@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
+from typing import overload
 
-from .MyString import MyString
+from vimmodules.sides.myvimetc.MyString import MyString
+from vimmodules.sides.myvimetc.observer import *
 
 
 class IStringHandler(ABC):
@@ -325,7 +327,23 @@ class ModelStrSubSystemDefault(ModelStrSubSystemBase):
         return None
 
 
-class ModelDefault(ModelBase):
+class ObservableBaseMixin(ObservableBase):
+    _obs_list: list[ObserverBase] = []
+
+    def registry(self, obj: ObserverBase):
+        self._obs_list.append(obj)
+        self.update()
+
+    def unsubscribe(self, obj: ObserverBase):
+        self._obs_list.remove(obj)
+
+    @abstractmethod
+    def update(self):
+        for obs in self._obs_list:
+            obs.notify()
+
+
+class ModelDefault(ModelBase, ObservableBaseMixin):
     _file_sub_sys: ModelFileSubSystemBase
     _str_sub_sys: ModelStrSubSystemBase
     _filename: str = None
@@ -341,6 +359,11 @@ class ModelDefault(ModelBase):
 
         self._buffer = self._file_sub_sys.get_from(filename)
 
+    def update(self):
+        d = {'amount': len(self._buffer), 'buffer': self.buffer}
+        for obs in self._obs_list:
+            obs.notify(d)
+
     @property
     def mode(self):
         return self._mode
@@ -351,10 +374,12 @@ class ModelDefault(ModelBase):
 
     @property
     def str_sub_sys(self):
+        # self.update() # after!
         return self._str_sub_sys
 
     @property
     def file_sub_sys(self):
+        # self.update() # after!
         return self._file_sub_sys
 
     @property
@@ -376,10 +401,41 @@ class ModelDefault(ModelBase):
     def get_str(self, num: int):
         return self._buffer[num].data()
 
-# d = [MyString("3i3i3i3i3i\n"), MyString("ksjsfjjfgsj")]
-# m = ModelFileSubSystemDefault()
-# m.load_to("file3", d)
 
-# s = MyString("123123TYU93939")
-# print(s.find("8"))
-# # FIX FIND
+class StatusBarModel(ObservableBaseMixin, ObserverBase):
+    _filename: str = None
+    _mode: str = "NAVI"
+
+    def __init__(self, file):
+        super().__init__()
+        self._filename = file
+
+    def update(self):
+        d = {"filename": self._filename, "mode": self._mode}
+        for obs in self._obs_list:
+            obs.notify(d)
+
+    def notify(self, *args, **kwargs):
+        pass
+
+    def registry(self, obj: ObserverBase):
+        super().registry(obj)
+        self.update()
+
+    @property
+    def filename(self):
+        return self._filename
+
+    @filename.setter
+    def filename(self, file):
+        self._filename = file
+        self.update()
+
+    @property
+    def mode(self):
+        return self._mode
+
+    @mode.setter
+    def mode(self, val: str):
+        self._mode = val
+        self.update()

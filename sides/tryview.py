@@ -1,14 +1,5 @@
-from MyString import MyString as MyString
-from abc import ABC, abstractmethod
-import linecache
-import fileinput
-import os
-import shutil
-from typing import overload
-from multipledispatch import dispatch
 from trymodel import *
-import curses
-from cursesadapt import *
+from vimmodules.sides.myvimetc.cursesadapt import *
 
 
 class TryView:

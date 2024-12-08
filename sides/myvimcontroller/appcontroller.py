@@ -1,10 +1,7 @@
-from abc import ABC, abstractmethod
-
-from .appmodel import *
-from .appview import *
-from .appcommands import *
-from .cursesadapt import *
-from .appclipmod import *
+from vimmodules.sides.myvimview.appview import *
+from vimmodules.sides.myvimcontroller.appcommands import *
+from vimmodules.sides.myvimetc.cursesadapt import *
+from vimmodules.sides.myvimmodel.appclipmod import *
 
 
 class ControllerBase(ABC):
@@ -20,12 +17,17 @@ class ControllerDefault(ControllerBase):
     _clipboard: ClipBoardBase
     _last_search: CommandBase
 
-    def __init__(self, model: ModelBase, view: ViewBase):
+    def __init__(self, model: ModelBase, view: ViewBase, v2: ViewBase):
         self._model_inst = model
         self._view_inst = view
         self._model_inst.mode = "NAVI"
         self._to_exec = []
         self._clipboard = ClipBoardPyperClip()
+        self._cursor_inst = self._view_inst.cursor
+        self._sbm = StatusBarModel(model.filename)
+        self._sbm.registry(v2)
+        self._cursor_inst.registry(v2)
+        self._model_inst.registry(v2)
 
     def navi_handle(self, key):
         # print(chr(key))
@@ -178,6 +180,10 @@ class ControllerDefault(ControllerBase):
 
         key = self._view_inst.text_module.getch()
         # print(key)
+        if key == ord('4'):
+            self._sbm.mode = "TEST"
+            return
+
         if self.cursor_movement(key):
             return None
 

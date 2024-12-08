@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
-from .appmodel import ModelBase
-from .appview import CursorBase
-from .appclipmod import ClipBoardBase
+from vimmodules.sides.myvimmodel.appmodel import ModelBase
+from vimmodules.sides.myvimview.appview import CursorBase
+from vimmodules.sides.myvimmodel.appclipmod import ClipBoardBase
 
 '''
 

@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
-from appdef import *
-from appparser import *
+from vimmodules.appdef import *
+from vimmodules.appparser import *
 
 
 class AppHandlerBase(ABC):
