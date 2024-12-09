@@ -2,10 +2,91 @@ from vimmodules.sides.myvimview.appview import *
 from vimmodules.sides.myvimcontroller.appcommands import *
 from vimmodules.sides.myvimetc.cursesadapt import *
 from vimmodules.sides.myvimmodel.appclipmod import *
+from enum import Enum
+
+
+class MODE(Enum):
+    NAVIGATION = "NAVI"
+    INPUT = "INPUT"
+    SEARCH = "SEARCH"
+    COMMAND = "COMMAND"
 
 
 class ControllerBase(ABC):
     pass
+
+
+class Executor:
+    _command_buffer: list[CommandBase]
+    _instance = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(Executor, cls).__new__(cls)
+        return cls._instance
+
+    def push_and_exec(self, command: CommandBase):
+        command.exec()
+        self._command_buffer.append(command)
+
+    def undo_last(self):
+        pass
+
+    def undo_string_spec(self, num: int):
+        pass
+
+    def undo_all(self):
+        pass
+
+    def tmp(self):
+        print(id(self))
+
+
+class AnyModeControllerBase(ABC):
+    _executor_inst = Executor()
+
+    @abstractmethod
+    def __init__(self):
+        pass
+
+    @abstractmethod
+    def handle(self, *args, **kwargs):
+        pass
+
+
+class NaviModeController(AnyModeControllerBase):
+
+    def __init__(self):
+        super().__init__()
+        self._tmp_str = ""
+
+    def handle(self, key: int):
+        self._executor_inst.tmp()
+        key = chr(key)
+
+
+class InputModeController(AnyModeControllerBase):
+    def __init__(self):
+        super().__init__()
+
+    def handle(self, *args, **kwargs):
+        self._executor_inst.tmp()
+
+
+class SearchModeController(AnyModeControllerBase):
+    def __init__(self):
+        super().__init__()
+
+    def handle(self, *args, **kwargs):
+        self._executor_inst.tmp()
+
+
+class CommandModeController(AnyModeControllerBase):
+    def __init__(self):
+        super().__init__()
+
+    def handle(self, *args, **kwargs):
+        self._executor_inst.tmp()
 
 
 class ControllerDefault(ControllerBase):
@@ -16,6 +97,8 @@ class ControllerDefault(ControllerBase):
     _to_exec: list[CommandBase]
     _clipboard: ClipBoardBase
     _last_search: CommandBase
+    _current_mode_state: AnyModeControllerBase = None
+    _mode_state_list: dict[str, AnyModeControllerBase]
 
     def __init__(self, model: ModelBase, view: ViewBase, v2: ViewBase):
         self._model_inst = model
@@ -28,6 +111,9 @@ class ControllerDefault(ControllerBase):
         self._sbm.registry(v2)
         self._cursor_inst.registry(v2)
         self._model_inst.registry(v2)
+        self._mode_state_list = {"NAVI": NaviModeController(), "INPUT": InputModeController(),
+                                 "SEARCH": SearchModeController(), "COMMAND": CommandModeController()}
+        self._current_mode_state = self._mode_state_list["NAVI"]
 
     def navi_handle(self, key):
         # print(chr(key))
@@ -158,11 +244,24 @@ class ControllerDefault(ControllerBase):
     def mode_handle(self, key):
         if key == 27:  # ESC
             self._mode = "NAVI"
-            return True
-        if self._mode == "NAVI" and (key == ord('/') or key == ord('?')):
+            self._sbm.mode = self._mode
+
+        elif self._mode == "NAVI" and (key == ord('/') or key == ord('?')):
             self._mode = "SEARCH"
+            self._sbm.mode = self._mode
             # print('///')
-            return True
+
+        elif self._mode == "NAVI" and key == ord(':'):
+            self._mode = "COMMAND"
+            self._sbm.mode = self._mode
+
+        elif self._mode == "NAVI" and chr(key) in "iIASr":
+            self._mode = "INPUT"
+            self._sbm.mode = self._mode
+        else:
+            return False
+        self._current_mode_state = self._mode_state_list[self._mode]
+        return True
 
     @staticmethod
     def validate_symbol(key):
@@ -188,9 +287,9 @@ class ControllerDefault(ControllerBase):
             return None
 
         self.mode_handle(key)
-        self._model_inst.mode = self._mode
-
-        self._view_inst.display()  # ?????
+        # self._model_inst.mode = self._mode
+        self._current_mode_state.handle(key)
+        # self._view_inst.display()  # ?????
 
         match self._mode:
             case "NAVI":
@@ -204,12 +303,3 @@ class ControllerDefault(ControllerBase):
                     self._to_exec.append(EraseCharDefault(self._model_inst, self._view_inst.cursor))
         self._model_inst.mode = self._mode
         self.execute()
-
-# if __name__ == '__main__':
-#     m = ModelDefault("file3")
-#     v = ViewDefault(m)
-#     c = ControllerDefault(m, v)
-#
-#     while True:
-#         v.display()
-#         c.process()

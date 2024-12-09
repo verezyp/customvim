@@ -100,6 +100,7 @@ class ViewStatusBar(ViewBase, ObserverBase):  # subs to StatBarModel, CursorMode
             self._buf[2] = arg_dict["cur_y"]
         if 'amount' in arg_dict:
             self._buf[3] = arg_dict["amount"]
+        self.display()
 
     def screen_configure(self):
         screen = self._text_module
@@ -111,6 +112,7 @@ class ViewStatusBar(ViewBase, ObserverBase):  # subs to StatBarModel, CursorMode
     def display(self):
         stdscr = self._text_module
         # stdscr.clear_scr()
+        self._win.clear()
         file = self._buf[0]
         mode = self._buf[1]
         cursor_y = self._buf[2]
