@@ -45,13 +45,16 @@ class CursorCursesDefault(CursorBase, ObservableBaseMixin, ObserverBase):
         self._x = 0
         self._y = 0
         self._buf_link = []
+        self._screen_x = 0
+        self._screen_y = 0
+        self._top_line = 0
 
     def notify(self, arg_dict):
         if arg_dict["buffer"]:
             self._buf_link = arg_dict["buffer"]
 
     def update(self):
-        d = {'cur_y': self._y, 'cur_x': self._x}
+        d = {'cur_y': self._y, 'cur_x': self._x, 'topline': self._top_line}
         for obs in self._obs_list:
             obs.notify(d)
 
@@ -61,22 +64,65 @@ class CursorCursesDefault(CursorBase, ObservableBaseMixin, ObserverBase):
     def set_pos(self, y, x):
         self._y, self._x = y, x
 
+    def _scaling(self):  # 0:27 --> == ; 27 + --> =
+        abs_y, abs_x = self._y, self._x
+        sc_y, sc_x = self._screen_y, self._screen_x
+        t_y, t_x = self._inst.getyx()
+
+        print(f"pre: abs = {abs_y}, t_y = {t_y}, sc_y = {sc_y}")
+
+        if t_y > 22:
+            sc_y = sc_y
+        else:
+            sc_y = abs_y % 28
+
+        # if t_y == 27 and abs_y > 27:
+        #     sc_y = 27
+        # else:
+        #     sc_y = abs_y % 28
+        print(f"aft: abs = {abs_y}, t_y = {t_y}, sc_y = {sc_y}")
+        # # print(t_y)
+        # if abs_y <= 26:
+        #     sc_y = abs_y
+        # elif abs_y >= 27:
+        #     if t_y == 27:
+        #         sc_y = 27
+        #         print("OWEOOOEOEO")
+        #     else:
+        #         sc_y = abs_y % 29
+        self._screen_y, self._screen_x = sc_y, sc_x
+
+    def s2(self):
+        pass
+
     def move(self, y, x):
         len_buf = len(self._model.buffer)
+
         if y < 0 or y > len_buf - 1:
             return None
 
-        len_str = len(self._model.get_str(y))
+        len_str = len(self._model.get_str(y)) - 1
 
         if x < 0:
             return None
 
         if x > len_str:
-            x = len_str - 1
+            x = len_str
 
         self._y = y
         self._x = x
-        self._inst.cursor_move(y, x)
+
+        if y < self._top_line:
+            self._top_line = y
+        elif y >= self._top_line + 28:
+            self._top_line = y - 27
+        # self.update()
+        self._screen_y = y - self._top_line
+
+        # self._scaling()
+        print(self._screen_y, y, self._top_line)
+        self._inst.cursor_move(self._screen_y, x)
+
         self.update()
 
 
@@ -84,7 +130,7 @@ from vimmodules.sides.myvimmodel.appmodel import ObserverBase
 
 
 class ViewStatusBar(ViewBase, ObserverBase):  # subs to StatBarModel, CursorModel, CoreModel
-    _buf = [None, "pp", 0, 0]
+    _buf = [None, "pp", 0, 0, None]
 
     def __init__(self, text_mod: ITextModule):
         self._text_module = text_mod
@@ -100,10 +146,28 @@ class ViewStatusBar(ViewBase, ObserverBase):  # subs to StatBarModel, CursorMode
             self._buf[2] = arg_dict["cur_y"]
         if 'amount' in arg_dict:
             self._buf[3] = arg_dict["amount"]
+        if 'tmp_str' in arg_dict:
+            self._buf[4] = arg_dict["tmp_str"]
         self.display()
+
+    @staticmethod
+    def _set_console_size(width, height):
+        os.system(f"mode con: cols={width} lines={height}")
+
+        hwnd = ctypes.windll.kernel32.GetStdHandle(-11)  # STD_OUTPUT_HANDLE
+
+        rect = ctypes.create_string_buffer(22)
+        ctypes.windll.kernel32.GetConsoleScreenBufferInfo(hwnd, rect)
+
+        left, top, right, bottom = 0, 0, width - 1, height - 1
+
+        ctypes.windll.kernel32.SetConsoleWindowInfo(hwnd, True, ctypes.byref(
+            (ctypes.c_short * 4)(left, top, right, bottom)
+        ))
 
     def screen_configure(self):
         screen = self._text_module
+        # self._set_console_size(120, 30)
         # screen.noecho()  # Отключаем отображение вводимых символов
         # screen.cbreak()  # Оперативное получение символов без ожидания Enter
         # screen.keypad(True)  # Включаем обработку специальных клавиш (стрелок)
@@ -119,7 +183,10 @@ class ViewStatusBar(ViewBase, ObserverBase):  # subs to StatBarModel, CursorMode
         amount = self._buf[3]
         max_y, max_x = 30, 120
 
-        status_bar = f"FILE: {file}. MODE: {mode}. CUR_STR: {cursor_y}. AMOUNT: {amount}"
+        if self._buf[4] == "":
+            status_bar = f"FILE: {file}. MODE: {mode}. CUR_STR: {cursor_y}. AMOUNT: {amount}."
+        else:
+            status_bar = f"FILE: {file}. MODE: {mode}. CUR_STR: {cursor_y}. AMOUNT: {amount}. |{self._buf[4]}"
         self._win.refresh()
         self._win.addstr(0, 0, status_bar[:max_x - 1])
         self._win.refresh()
@@ -133,20 +200,31 @@ class ViewStatusBar(ViewBase, ObserverBase):  # subs to StatBarModel, CursorMode
         pass
 
 
-class ViewDefault(ViewBase):
+class ViewDefault(ViewBase, ObserverBase):
     _cursor_inst: CursorBase
     _text_module: ITextModule
     _model_inst: ModelBase
     _scr_top_str: int = 0
-    _scr_bot_str: int = 30
+    _scr_bot_str: int = 29
 
     def __init__(self, model: ModelBase):
         mod = CursesTextModule()
         self._text_module = mod
         self._model_inst = model
-        self._set_console_size(120, 30)
+        # self._set_console_size(120, 30)
         self.screen_configure()
         self._cursor_inst = CursorCursesDefault(mod, model)
+        self._cursor_x = 0
+        self._cursor_y = 0
+        self._top = 0
+
+    def notify(self, args_dict):
+        if "cur_x" in args_dict:
+            self._cursor_x = args_dict["cur_x"]
+        if "cur_y" in args_dict:
+            self._cursor_y = args_dict["cur_y"]
+        if "topline" in args_dict:
+            self._top = args_dict["topline"]
 
     @property
     def text_module(self):
@@ -181,41 +259,57 @@ class ViewDefault(ViewBase):
             (ctypes.c_short * 4)(left, top, right, bottom)
         ))
 
-    def display(self):  # 0 - 28 string + last - status_bar (set_console_size(120, 30))
+    def config(self):
+        cur_y, cur_x = self._cursor_y, self._cursor_x
+        top_edge, bot_edge = self._scr_top_str, self._scr_bot_str
+        if cur_y > bot_edge - 1:
+            bot_edge = cur_y
+            top_edge = bot_edge - 29
+        if cur_y < top_edge:
+            top_edge = cur_y
+            bot_edge = top_edge + 29
+        self._scr_top_str, self._scr_bot_str = top_edge, bot_edge
+        # print(cur_y, cur_x, self._scr_top_str, self._scr_bot_str)
 
+    def display(self):  # 0 - 28 string + last - status_bar (set_console_size(120, 30))
+        # self.config()
         stdscr = self._text_module
         max_y, max_x = stdscr.getmaxyx()
         win2 = curses.newwin(max_y - 1, max_x - 1, 0, 0)
         cursor_y, cursor_x = self._cursor_inst.get_pos()
-
+        top_line = self._top
         main_text = []
         buf_size = len(self._model_inst.buffer)
-
-        if buf_size < self._scr_bot_str:
-            self._scr_bot_str = buf_size - 1
-
-        for i in range(buf_size):
+        for i in range(len(self._model_inst.buffer)):
             main_text.append(self._model_inst.get_str(i))
+            # print(self._model_inst.get_str(i))
+        # if buf_size < self._scr_bot_str:
+        #     self._scr_bot_str = buf_size - 1
+        win2.clear()
+        i = 0
+        # if main_text[181]:
+        #     print("+++++++++++++++++++++++++++++++++===")
+        print(main_text.index(main_text[-1]))
+        for line in main_text[top_line:top_line + 28]:
+            win2.addstr(i, 0, line)
+            i += 1
+            if i == 28:
+                print(top_line)
+            if main_text.index(line) == 179:
+                print("JJJJJJJJJJJJJJJJJJJJJJJJ")
+
+        # for i, line in enumerate(main_text[top_line:top_line + 28]):
+        #     win2.addstr(i, 0, line)
 
         # stdscr.clear_scr()
-        win2.clear()
+
         max_y, max_x = stdscr.getmaxyx()
 
-        for idx, line in enumerate(main_text):
-            if idx >= max_y - 1:
-                break
-            win2.addstr(idx, 0, line[:max_x - 1])
-            # stdscr.add_str(idx, 0, line[:max_x - 1])
+        # for idx, line in enumerate(main_text):
+        #     if idx >= max_y - 1:
+        #         break
+        #     win2.addstr(idx, 0, line[:max_x - 1])
+        # stdscr.add_str(idx, 0, line[:max_x - 1])
 
-        mode = self._model_inst.mode
-        file = self._model_inst.filename
-        amount = len(self._model_inst.buffer)
-
-        # status_bar = f"FILE: {file}. MODE: {mode}. CUR_STR: {cursor_y}. AMOUNT: {amount}"
-        # stdscr.add_str(max_y - 1, 0, status_bar[:max_x - 1])
-
-        # self._cursor_inst.move(cursor_y, cursor_x)
-
-        # self._cursor_inst.set_pos(cursor_y, cursor_x)
         win2.refresh()
         # stdscr.refresh_scr()

@@ -17,8 +17,10 @@ class ControllerBase(ABC):
 
 
 class Executor:
-    _command_buffer: list[CommandBase]
     _instance = None
+
+    def __init__(self):
+        self._command_buffer = []
 
     def __new__(cls):
         if cls._instance is None:
@@ -39,7 +41,8 @@ class Executor:
         pass
 
     def tmp(self):
-        print(id(self))
+        pass
+        # print(id(self))
 
 
 class AnyModeControllerBase(ABC):
@@ -56,28 +59,132 @@ class AnyModeControllerBase(ABC):
 
 class NaviModeController(AnyModeControllerBase):
 
-    def __init__(self):
+    def __init__(self, model: ModelBase, cursor: CursorBase, clipboard: ClipBoardBase):
         super().__init__()
-        self._tmp_str = ""
+        self._model_inst = model
+        self._cursor_inst = cursor
+        self._clipboard = clipboard
 
-    def handle(self, key: int):
+    def handle(self, key: int, sbm: StatusBarModel):
         self._executor_inst.tmp()
         key = chr(key)
+        if sbm.tmp_str == "":
+            return
+        match sbm.tmp_str:
+            case "^" | "0":
+                self._executor_inst.push_and_exec(
+                    (CursorMoveToStrSideDefault("START", self._cursor_inst, self._model_inst)))
+                sbm.tmp_str = ""
+            case "$":
+                self._executor_inst.push_and_exec(CursorMoveToStrSideDefault("END", self._cursor_inst,
+                                                                             self._model_inst))
+                sbm.tmp_str = ""
+            case "w":
+                self._executor_inst.push_and_exec(CursorMoveWordSideDefault("w", self._cursor_inst, self._model_inst))
+                sbm.tmp_str = ""
+            case "b":
+                self._executor_inst.push_and_exec(CursorMoveWordSideDefault("b", self._cursor_inst, self._model_inst))
+                sbm.tmp_str = ""
+            case "gg":
+                self._executor_inst.push_and_exec(CursorMoveToFileStartDefault(self._cursor_inst, self._model_inst))
+                sbm.tmp_str = ""
+            case "dd":
+                self._executor_inst.push_and_exec(
+                    CutFullDefault(self._model_inst, self._cursor_inst,
+                                   self._clipboard))
+                sbm.tmp_str = ""
+            case "diw":
+                self._executor_inst.push_and_exec(EraseDiwDefault(self._cursor_inst, self._model_inst))
+                sbm.tmp_str = ""
+            case "yy":
+                self._executor_inst.push_and_exec(
+                    CopyStrDefault(self._cursor_inst, self._model_inst, self._clipboard))
+                sbm.tmp_str = ""
+            case "yw":
+                self._executor_inst.push_and_exec(
+                    CopyWordCurPosDefault(self._cursor_inst, self._model_inst, self._clipboard))
+                sbm.tmp_str = ""
+            case "p":
+                self._executor_inst.push_and_exec(
+                    PasteCurPos(self._cursor_inst, self._model_inst, self._clipboard))
+                sbm.tmp_str = ""
+            case _:
+                if key == "G":
+                    if sbm.tmp_str[: len(sbm.tmp_str) - 1].isdigit():
+                        num = int(sbm.tmp_str[: len(sbm.tmp_str) - 1])
+                        self._executor_inst.push_and_exec(
+                            CursorMoveToNDefault(num, self._cursor_inst, self._model_inst))
+                    sbm.tmp_str = ""
+                elif sbm.tmp_str and sbm.tmp_str[0] == 'r' and len(sbm.tmp_str) == 2:
+                    self._executor_inst.push_and_exec(
+                        ReplaceDefault(sbm.tmp_str[1], self._cursor_inst, self._model_inst))
+                    sbm.tmp_str = ""
+                elif key == 338:  # PGDOWN
+                    pass
+                elif key == 339:  # PGUP
+                    pass
+                else:
+                    allowed = ["g", "d", "di", "y", "p", "r"]
+                    if not (sbm.tmp_str in allowed or sbm.tmp_str.isdigit()):
+                        sbm.tmp_str = ""
 
 
 class InputModeController(AnyModeControllerBase):
-    def __init__(self):
+    def __init__(self, model: ModelBase, cursor: CursorBase):
         super().__init__()
+        self._model_inst = model
+        self._cursor_inst = cursor
+        self._state = 0
 
-    def handle(self, *args, **kwargs):
-        self._executor_inst.tmp()
+    @staticmethod
+    def validate_symbol(key):
+        char = chr(key)
+        allowed = "1234567890-=!@#$%^&*()_+!!\"№;%:?*()_+йцукенгшщзхъ\\/|фывапролджэяч" \
+                  "смитьбю.ЙЦУКЕНГШЩЗХЪФЫВАПРО ЛДЖЭЯЧСМИТЬБЮ.qwertyuiop" \
+                  "[]asdfghjkl;'zxcvbnm,./QWERTYUIOP[]ASDFGHJKL;'ZXCVBNM,./<>,.?/;:'`ёЁ~/"
+        return char in allowed
+
+    def reset_state(self):
+        self._state = 0
+
+    def _pre_commands(self, s):
+        match s:
+            case "i":
+                self._state = 1
+            case "I":
+                self._executor_inst.push_and_exec(CursorMoveToStrSideDefault("START", self._cursor_inst,
+                                                                             self._model_inst))
+                self._state = 1
+            case "A":
+                self._executor_inst.push_and_exec(CursorMoveToStrSideDefault("END", self._cursor_inst,
+                                                                             self._model_inst))
+                self._state = 1
+            case "S":
+                self._executor_inst.push_and_exec(MakeEmptyDefault(self._model_inst, self._cursor_inst))
+                self._state = 1
+
+    def _default_input(self, key):
+        if self.validate_symbol(key):
+            self._executor_inst.push_and_exec(InsertDefault(chr(key), self._model_inst, self._cursor_inst))
+        elif key == 8:  # BACKSPACE
+            self._executor_inst.push_and_exec(EraseCharDefault(self._model_inst, self._cursor_inst))
+        elif key == 10:
+            self._executor_inst.push_and_exec(InsertEnterDefault(self._model_inst, self._cursor_inst))
+
+    def handle(self, key: int, sbm: StatusBarModel):
+        if self._state:
+            self._default_input(key)
+            sbm.tmp_str = ""
+        else:
+            self._pre_commands(sbm.tmp_str)
+            sbm.tmp_str = ""
 
 
 class SearchModeController(AnyModeControllerBase):
     def __init__(self):
         super().__init__()
 
-    def handle(self, *args, **kwargs):
+    def handle(self, key: int, sbm: StatusBarModel):
         self._executor_inst.tmp()
 
 
@@ -85,7 +192,7 @@ class CommandModeController(AnyModeControllerBase):
     def __init__(self):
         super().__init__()
 
-    def handle(self, *args, **kwargs):
+    def handle(self, key: int, tmp_str: str):
         self._executor_inst.tmp()
 
 
@@ -110,10 +217,13 @@ class ControllerDefault(ControllerBase):
         self._sbm = StatusBarModel(model.filename)
         self._sbm.registry(v2)
         self._cursor_inst.registry(v2)
+        self._cursor_inst.registry(view)
         self._model_inst.registry(v2)
-        self._mode_state_list = {"NAVI": NaviModeController(), "INPUT": InputModeController(),
+        self._mode_state_list = {"NAVI": NaviModeController(model, self._cursor_inst, self._clipboard),
+                                 "INPUT": InputModeController(model, self._cursor_inst),
                                  "SEARCH": SearchModeController(), "COMMAND": CommandModeController()}
         self._current_mode_state = self._mode_state_list["NAVI"]
+        self._tmp_str = ""
 
     def navi_handle(self, key):
         # print(chr(key))
@@ -245,6 +355,8 @@ class ControllerDefault(ControllerBase):
         if key == 27:  # ESC
             self._mode = "NAVI"
             self._sbm.mode = self._mode
+            self._tmp_str = ""
+            self._mode_state_list["INPUT"].reset_state()
 
         elif self._mode == "NAVI" and (key == ord('/') or key == ord('?')):
             self._mode = "SEARCH"
@@ -255,7 +367,7 @@ class ControllerDefault(ControllerBase):
             self._mode = "COMMAND"
             self._sbm.mode = self._mode
 
-        elif self._mode == "NAVI" and chr(key) in "iIASr":
+        elif self._mode == "NAVI" and self._sbm.tmp_str and self._sbm.tmp_str in "iIAS":
             self._mode = "INPUT"
             self._sbm.mode = self._mode
         else:
@@ -275,31 +387,18 @@ class ControllerDefault(ControllerBase):
         if self._to_exec:
             self._to_exec.pop().exec()
 
-    def process(self):
+    def process(self) -> None:
 
         key = self._view_inst.text_module.getch()
-        # print(key)
-        if key == ord('4'):
-            self._sbm.mode = "TEST"
-            return
 
         if self.cursor_movement(key):
             return None
 
-        self.mode_handle(key)
-        # self._model_inst.mode = self._mode
-        self._current_mode_state.handle(key)
-        # self._view_inst.display()  # ?????
+        if self.validate_symbol(key):
+            self._sbm.tmp_str += chr(key)
 
-        match self._mode:
-            case "NAVI":
-                self.navi_handle(key)
-            case "SEARCH":
-                self.search_handle(key)
-            case "INPUT":
-                if self.validate_symbol(key):
-                    self._to_exec.append(InsertDefault(chr(key), self._model_inst, self._view_inst.cursor))
-                elif key == 8:  # BACKSPACE
-                    self._to_exec.append(EraseCharDefault(self._model_inst, self._view_inst.cursor))
-        self._model_inst.mode = self._mode
-        self.execute()
+        self.mode_handle(key)
+
+        self._current_mode_state.handle(key, self._sbm)
+
+        return None

@@ -58,6 +58,7 @@ class CursesTextModule(ITextModule):
     def __init__(self):
         self._scr = curses.initscr()
 
+
     @property
     def screen(self):
         return self._scr
@@ -82,6 +83,9 @@ class CursesTextModule(ITextModule):
 
     def clear_scr(self):
         self._scr.clear()
+
+    def getyx(self):
+        return self._scr.getyx()
 
     def end_win(self):
         curses.endwin()

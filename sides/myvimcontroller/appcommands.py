@@ -41,6 +41,21 @@ class InsertDefault(CommandBase):
         pass
 
 
+class InsertEnterDefault(CommandBase):
+
+    def __init__(self, model: ModelBase, cursor: CursorBase):
+        self._row, self._col = cursor.get_pos()
+        self._model = model
+        self._cursor = cursor
+
+    def exec(self):
+        self._model.str_sub_sys.insert_new(self._row, self._col, "\n")
+
+
+    def undo(self):
+        pass
+
+
 class ReplaceDefault(CommandBase):
 
     def __init__(self, in_chr: chr, cursor: CursorBase, model: ModelBase):
@@ -95,12 +110,21 @@ class EraseCharDefault(CommandBase):
         self._cursor = cursor
 
     def exec(self):
-        if self._col == 0:
-            if self._row != 1:
-                self._row = self._row - 1
-                self._col = len(self._model.get_str(self._row)) - 1
-        self._model.str_sub_sys.erase_chr(self._row, self._col - 1)
-        self._cursor.move(self._row, self._col - 1)
+
+        if self._col == 0:  # len - 1 == \n
+            if self._row != 0:
+                tmp_len = len(self._model.get_str(self._row - 1)) - 1
+                # print("=====", self._model.buffer[self._row - 1].data()[len(self._model.get_str(self._row - 1)) - 1],
+                #       "=====")
+                # self._model.str_sub_sys.erase_chr(self._row - 1, len(self._model.get_str(self._row - 1)))
+                self._model.str_sub_sys.insert_str(self._row - 1, len(self._model.get_str(self._row - 1)) - 1,
+                                                   self._model.get_str(self._row)[:-1])  # - 1 to remove \n
+
+                self._model.str_sub_sys.erase_full_str(self._row)
+                self._cursor.move(self._row - 1, tmp_len)
+        else:
+            self._model.str_sub_sys.erase_chr(self._row, self._col - 1)
+            self._cursor.move(self._row, self._col - 1)
 
     def undo(self):
         pass

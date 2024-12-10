@@ -37,10 +37,10 @@ class IStringHandler(ABC):
 
 
 class MyStringHandler(IStringHandler):
-    _obj = None
 
     # overload ???
     def __init__(self, init_str: str = None, count_of_symbols: int = None, symbol: chr = None):
+        self._obj = None
         if not (init_str is None) and count_of_symbols is None and symbol is None:
             self._obj = MyString(init_str)
         elif not (init_str is None) and not (count_of_symbols is None):
@@ -74,6 +74,36 @@ class MyStringHandler(IStringHandler):
         return self._obj.find(in_str, index)
 
 
+class DefaultStringHandler(IStringHandler):
+
+    def __init__(self, string: str):
+        self._obj = string
+
+    def data(self) -> str:
+        return self._obj
+
+    def size(self) -> int:
+        return len(self._obj)
+
+    def empty(self) -> bool:
+        return self._obj == ""
+
+    def insert(self, in_str: str, ind):
+        s_list = list(self._obj)
+        s_list.insert(ind, in_str)
+        self._obj = ''.join(s_list)
+
+    def replace(self, index: int, count: int, in_str: str):
+        new_str = self._obj[:index] + in_str + self._obj[index + count:]
+        self._obj = new_str
+
+    def erase(self, index, count):
+        self.replace(index, count, "")
+
+    def find(self, in_str: str, index: int):
+        return self._obj.find(in_str, index)
+
+
 class ModelFileSubSystemBase(ABC):
 
     @abstractmethod
@@ -88,6 +118,10 @@ class ModelFileSubSystemBase(ABC):
 class ModelStrSubSystemBase(ABC):
     @abstractmethod
     def insert_str(self, row: int, col: int, input_str: str):
+        pass
+
+    @abstractmethod
+    def insert_new(self, row: int, col: int, input_str: str):
         pass
 
     @abstractmethod
@@ -182,6 +216,7 @@ class ModelFileSubSystemDefault(ModelFileSubSystemBase):
         with open(filename, "r") as f:
             while True:
                 line = f.readline()
+                # line = line.replace('\n', '')
                 ms_line = self._str_handler(line)
                 if not line:
                     break
@@ -197,6 +232,12 @@ class ModelStrSubSystemDefault(ModelStrSubSystemBase):
 
     def __init__(self, base: ModelBase):
         self._base = base
+        self._string_handler = MyStringHandler
+
+    def insert_new(self, row: int, col: int, input_str: str):
+        s = self._string_handler(self._base.get_str(row)[col:])
+        self._base.buffer[row].erase(col, len(self._base.buffer[row].data()) - col - 1)
+        self._base.buffer.insert(row + 1, s)
 
     def insert_str(self, row: int, col: int, input_str: str) -> None:
         self._base.buffer[row].insert(input_str, col)
@@ -338,7 +379,7 @@ class ObservableBaseMixin(ObservableBase):
         self._obs_list.remove(obj)
 
     @abstractmethod
-    def update(self):
+    def update(self, *args, **kwargs):
         for obs in self._obs_list:
             obs.notify()
 
@@ -405,13 +446,14 @@ class ModelDefault(ModelBase, ObservableBaseMixin):
 class StatusBarModel(ObservableBaseMixin, ObserverBase):
     _filename: str = None
     _mode: str = "NAVI"
+    _tmp_str: str = ""
 
     def __init__(self, file):
         super().__init__()
         self._filename = file
 
     def update(self):
-        d = {"filename": self._filename, "mode": self._mode}
+        d = {"filename": self._filename, "mode": self._mode, "tmp_str": self._tmp_str}
         for obs in self._obs_list:
             obs.notify(d)
 
@@ -420,6 +462,15 @@ class StatusBarModel(ObservableBaseMixin, ObserverBase):
 
     def registry(self, obj: ObserverBase):
         super().registry(obj)
+        self.update()
+
+    @property
+    def tmp_str(self):
+        return self._tmp_str
+
+    @tmp_str.setter
+    def tmp_str(self, val):
+        self._tmp_str = val
         self.update()
 
     @property
