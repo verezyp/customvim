@@ -69,7 +69,7 @@ class CursorCursesDefault(CursorBase, ObservableBaseMixin, ObserverBase):
         sc_y, sc_x = self._screen_y, self._screen_x
         t_y, t_x = self._inst.getyx()
 
-        print(f"pre: abs = {abs_y}, t_y = {t_y}, sc_y = {sc_y}")
+        # print(f"pre: abs = {abs_y}, t_y = {t_y}, sc_y = {sc_y}")
 
         if t_y > 22:
             sc_y = sc_y
@@ -80,7 +80,7 @@ class CursorCursesDefault(CursorBase, ObservableBaseMixin, ObserverBase):
         #     sc_y = 27
         # else:
         #     sc_y = abs_y % 28
-        print(f"aft: abs = {abs_y}, t_y = {t_y}, sc_y = {sc_y}")
+        # print(f"aft: abs = {abs_y}, t_y = {t_y}, sc_y = {sc_y}")
         # # print(t_y)
         # if abs_y <= 26:
         #     sc_y = abs_y
@@ -120,7 +120,7 @@ class CursorCursesDefault(CursorBase, ObservableBaseMixin, ObserverBase):
         self._screen_y = y - self._top_line
 
         # self._scaling()
-        print(self._screen_y, y, self._top_line)
+        # print(self._screen_y, y, self._top_line)
         self._inst.cursor_move(self._screen_y, x)
 
         self.update()
@@ -289,19 +289,11 @@ class ViewDefault(ViewBase, ObserverBase):
         i = 0
         # if main_text[181]:
         #     print("+++++++++++++++++++++++++++++++++===")
-        print(main_text.index(main_text[-1]))
+        # print(main_text.index(main_text[-1]))
         for line in main_text[top_line:top_line + 28]:
-            win2.addstr(i, 0, line)
+            win2.addstr(i, 0, str(i) + " " + line)
             i += 1
-            if i == 28:
-                print(top_line)
-            if main_text.index(line) == 179:
-                print("JJJJJJJJJJJJJJJJJJJJJJJJ")
 
-        # for i, line in enumerate(main_text[top_line:top_line + 28]):
-        #     win2.addstr(i, 0, line)
-
-        # stdscr.clear_scr()
 
         max_y, max_x = stdscr.getmaxyx()
 

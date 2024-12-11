@@ -107,7 +107,7 @@ class DefaultStringHandler(IStringHandler):
 class ModelFileSubSystemBase(ABC):
 
     @abstractmethod
-    def get_from(self, filename: str):
+    def get_from(self, filename: str, *args, **kwargs):
         pass
 
     @abstractmethod
@@ -167,6 +167,10 @@ class ModelBase(ABC):
     def filename(self):
         pass
 
+    @abstractmethod
+    def cancel_all(self):
+        pass
+
     @property
     @abstractmethod
     def buffer(self):
@@ -175,6 +179,16 @@ class ModelBase(ABC):
     @filename.setter
     @abstractmethod
     def filename(self, value):
+        pass
+
+    @property
+    @abstractmethod
+    def edited(self):
+        pass
+
+    @edited.setter
+    @abstractmethod
+    def edited(self, val):
         pass
 
     @abstractmethod
@@ -209,8 +223,9 @@ class ModelBase(ABC):
 class ModelFileSubSystemDefault(ModelFileSubSystemBase):
     _str_handler: IStringHandler = MyStringHandler
 
-    def get_from(self, filename):
+    def get_from(self, filename: str, model: ModelBase):
         buf = []
+        bp = []
         if filename is None:
             return None
         with open(filename, "r") as f:
@@ -218,9 +233,13 @@ class ModelFileSubSystemDefault(ModelFileSubSystemBase):
                 line = f.readline()
                 # line = line.replace('\n', '')
                 ms_line = self._str_handler(line)
+                bp_line = self._str_handler(line)
                 if not line:
                     break
                 buf.append(ms_line)
+                bp.append(bp_line)
+            model.buffer = buf
+            model._backup = bp
             return buf
 
     def load_to(self, filename, buf):
@@ -238,21 +257,27 @@ class ModelStrSubSystemDefault(ModelStrSubSystemBase):
         s = self._string_handler(self._base.get_str(row)[col:])
         self._base.buffer[row].erase(col, len(self._base.buffer[row].data()) - col - 1)
         self._base.buffer.insert(row + 1, s)
+        self._base.edited = True
 
     def insert_str(self, row: int, col: int, input_str: str) -> None:
         self._base.buffer[row].insert(input_str, col)
+        self._base.edited = True
 
     def replace_chr(self, row, col, input_chr: chr) -> None:
         self._base.buffer[row].replace(col, 1, input_chr)
+        self._base.edited = True
 
     def erase_full_str(self, row: int) -> None:
         self._base.buffer.pop(row)
+        self._base.edited = True
 
     def make_empty(self, row):
         self._base.buffer[row].erase(0, self._base.buffer[row].size() - 1)
+        self._base.edited = True
 
     def erase_chr(self, row: int, col: int) -> None:
         self._base.buffer[row].erase(col, 1)
+        self._base.edited = True
 
     # TEST IT
     def erase_word_diw_spec(self, row: int, col) -> None:
@@ -276,6 +301,7 @@ class ModelStrSubSystemDefault(ModelStrSubSystemBase):
         dif = right_ind - left_ind + 1
         s.erase(left_ind, dif)
         self._base.buffer[row] = s
+        self._base.edited = True
 
     def get_end_of_str(self, row: int) -> int:
         return self._base.buffer[row].size() - 1
@@ -319,7 +345,6 @@ class ModelStrSubSystemDefault(ModelStrSubSystemBase):
 
         while index < n and not text[index].isalnum():
             index += 1
-
         return index
 
     def viw_b(self, cur_y: int, cur_x: int) -> int:
@@ -335,24 +360,15 @@ class ModelStrSubSystemDefault(ModelStrSubSystemBase):
 
         while index > 0 and text[index - 1].isalnum():
             index -= 1
-
         return index
 
     def get_word_at_index(self, row: int, col: int):
-        """
-        Возвращает слово, на котором находится символ с указанным индексом.
 
-        :param sentence: Строка, содержащая текст.
-        :param char_index: Индекс символа в строке.
-        :return: Слово, к которому относится символ, или сообщение об ошибке.
-        """
         sentence = self._base.get_str(row)
         char_index = col
-        # Проверяем, что индекс не выходит за пределы строки
         if char_index < 0 or char_index >= len(sentence):
-            return "Индекс вне диапазона строки"
+            raise IndexError
 
-        # Разбиваем строку на слова с их начальным и конечным индексами
         words = sentence.split()
         current_index = 0
 
@@ -363,7 +379,6 @@ class ModelStrSubSystemDefault(ModelStrSubSystemBase):
             if word_start <= char_index <= word_end:
                 return word
 
-            # Учитываем пробел после слова
             current_index += len(word) + 1
 
         return None
@@ -392,6 +407,8 @@ class ModelDefault(ModelBase, ObservableBaseMixin):
     _mode: str = None
     _string_handler = None
     _buffer = []
+    _edited: bool = False
+    _backup = []
 
     def __init__(self, filename: str):
         self._filename = filename
@@ -399,7 +416,7 @@ class ModelDefault(ModelBase, ObservableBaseMixin):
         self._file_sub_sys = ModelFileSubSystemDefault()
         self._str_sub_sys = ModelStrSubSystemDefault(self)
 
-        self._buffer = self._file_sub_sys.get_from(filename)
+        self._buffer = self._file_sub_sys.get_from(filename, self)
 
     def update(self):
         d = {'amount': len(self._buffer), 'buffer': self.buffer}
@@ -415,6 +432,19 @@ class ModelDefault(ModelBase, ObservableBaseMixin):
 
         return wrapper
 
+    def cancel_all(self):
+        self._buffer = self._backup.copy()
+        self.update()
+
+    @property
+    @upd
+    def edited(self):
+        return self._edited
+
+    @edited.setter
+    def edited(self, val):
+        self._edited = val
+
     @property
     def mode(self):
         return self._mode
@@ -426,13 +456,11 @@ class ModelDefault(ModelBase, ObservableBaseMixin):
     @property
     @upd
     def str_sub_sys(self):
-        # self.update() # after!
         return self._str_sub_sys
 
     @property
     @upd
     def file_sub_sys(self):
-        # self.update() # after!
         return self._file_sub_sys
 
     @property

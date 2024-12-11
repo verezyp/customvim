@@ -367,3 +367,116 @@ class CursorMoveToNDefault(CommandBase):
 
     def undo(self):
         pass
+
+
+class WriteDefault(CommandBase):
+
+    def __init__(self, model: ModelBase):
+        self._model = model
+
+    def exec(self):
+        self._model.file_sub_sys.load_to(self._model.filename, self._model.buffer)
+
+    def undo(self):
+        pass
+
+
+class WriteAndExitDefault(CommandBase):
+    def __init__(self, model: ModelBase):
+        self._model = model
+
+    def exec(self):
+        self._model.file_sub_sys.load_to(self._model.filename, self._model.buffer)
+        exit(0)
+
+    def undo(self):
+        pass
+
+
+class ExitDefault(CommandBase):
+    def __init__(self, model: ModelBase):
+        self._model = model
+
+    def exec(self):
+        if self._model.edited is False:
+            exit(0)
+        pass
+
+    def undo(self):
+        pass
+
+
+class ForceExitDefault(CommandBase):
+    def __init__(self, model: ModelBase):
+        self._model = model
+
+    def exec(self):
+        exit(0)
+
+    def undo(self):
+        pass
+
+
+class WriteQuitDefault(WriteAndExitDefault):
+    pass
+
+
+class WriteToFilenameDefault(CommandBase):
+    def __init__(self, model: ModelBase, filename: str):
+        self._model = model
+        self._filename = filename
+
+    def exec(self):
+        self._model.file_sub_sys.load_to(self._filename, self._model.buffer)
+
+    def undo(self):
+        pass
+
+
+class OpenFilenameDefault(CommandBase):
+    def __init__(self, model: ModelBase, cursor: CursorBase, filename: str):
+        self._model = model
+        self._filename = filename
+        self._cursor = cursor
+
+    def exec(self):
+        try:
+            self._model.file_sub_sys.get_from(self._filename, self._model)
+            self._model.edited = False
+            self._model.update()
+            self._cursor.move(0, 0)
+        except FileNotFoundError:
+            pass
+
+    def undo(self):
+        pass
+
+
+class CancelAllAdditional(CommandBase):
+    def __init__(self, model: ModelBase, cursor: CursorBase):
+        self._model = model
+        self._cursor = cursor
+
+    def exec(self):
+        self._model.cancel_all()
+        self._cursor.move(0, 0)
+
+    def undo(self):
+        pass
+
+
+class CancelStrAdditional(CommandBase):
+    def __init__(self, model: ModelBase, cursor: CursorBase):
+        self._model = model
+        self._cursor = cursor
+
+    def exec(self):
+        y, _ = self._cursor.get_pos()
+        if len(self._model._backup) < y:
+            return
+
+        self._model.buffer[y] = self._model._backup[y]
+        # self._cursor.move(0, 0)
+
+    def undo(self):
+        pass

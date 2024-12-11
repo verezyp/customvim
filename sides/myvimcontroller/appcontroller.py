@@ -107,6 +107,10 @@ class NaviModeController(AnyModeControllerBase):
                 self._executor_inst.push_and_exec(
                     PasteCurPos(self._cursor_inst, self._model_inst, self._clipboard))
                 sbm.tmp_str = ""
+            case "U":
+                self._executor_inst.push_and_exec(
+                    CancelStrAdditional(self._model_inst, self._cursor_inst))
+                sbm.tmp_str = ""
             case _:
 
                 if key == "G":
@@ -230,11 +234,51 @@ class SearchModeController(AnyModeControllerBase):
 
 
 class CommandModeController(AnyModeControllerBase):
-    def __init__(self):
+    def __init__(self, model: ModelBase, cursor: CursorBase):
         super().__init__()
+        self._model_inst = model
+        self._cursor_inst = cursor
 
-    def handle(self, key: int, tmp_str: str):
-        pass
+    def handle(self, key: int, sbm: StatusBarModel):
+        if sbm.tmp_str and sbm.tmp_str[0] == ":" and key == 10:
+            match sbm.tmp_str[1:]:
+                case "w":
+                    self._executor_inst.push_and_exec(WriteDefault(self._model_inst))
+                    sbm.tmp_str = ""
+                case "x":
+                    self._executor_inst.push_and_exec(WriteAndExitDefault(self._model_inst))
+                    sbm.tmp_str = ""
+                case "q":
+                    self._executor_inst.push_and_exec(ExitDefault(self._model_inst))
+                    sbm.tmp_str = ""
+                case "q!":
+                    self._executor_inst.push_and_exec(ForceExitDefault(self._model_inst))
+                    sbm.tmp_str = ""
+                case "wq!":
+                    self._executor_inst.push_and_exec(WriteQuitDefault(self._model_inst))
+                    sbm.tmp_str = ""
+
+                case "h":
+                    pass
+                case "sy":
+                    pass
+                case "e!":
+                    self._executor_inst.push_and_exec(CancelAllAdditional(self._model_inst, self._cursor_inst))
+                    sbm.tmp_str = ""
+
+                case _:
+                    if sbm.tmp_str and sbm.tmp_str[1]:
+                        if sbm.tmp_str[1] == "o":
+                            self._executor_inst.push_and_exec(
+                                OpenFilenameDefault(self._model_inst, self._cursor_inst, sbm.tmp_str[3:]))
+                            sbm.tmp_str = ""
+                        elif sbm.tmp_str[1] == "w":
+                            self._executor_inst.push_and_exec(WriteToFilenameDefault(self._model_inst, sbm.tmp_str[3:]))
+                            sbm.tmp_str = ""
+                        elif sbm.tmp_str[1:].isdigit():
+                            self._executor_inst.push_and_exec(
+                                CursorMoveToNDefault(int(sbm.tmp_str[1:]), self._cursor_inst, self._model_inst))
+                            sbm.tmp_str = ""
 
 
 class ControllerDefault(ControllerBase):
@@ -263,7 +307,7 @@ class ControllerDefault(ControllerBase):
         self._mode_state_list = {"NAVI": NaviModeController(model, self._cursor_inst, self._clipboard),
                                  "INPUT": InputModeController(model, self._cursor_inst),
                                  "SEARCH": SearchModeController(model, self._cursor_inst),
-                                 "COMMAND": CommandModeController()}
+                                 "COMMAND": CommandModeController(model, self._cursor_inst)}
         self._current_mode_state = self._mode_state_list["NAVI"]
         self._tmp_str = ""
         #   self._cursor_inst.move(120, 1)
