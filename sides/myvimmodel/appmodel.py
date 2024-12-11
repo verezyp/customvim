@@ -292,8 +292,9 @@ class ModelStrSubSystemDefault(ModelStrSubSystemBase):
             edge = 0
             shift = -1
 
-        for i in range(start_row, edge + shift, shift):
+        for i in range(start_row, edge + shift - 1, shift):
             line = buf[i]
+            print(i)
             if i == start_row:
                 ind = line.find(in_str, start_col)
             else:
@@ -405,6 +406,15 @@ class ModelDefault(ModelBase, ObservableBaseMixin):
         for obs in self._obs_list:
             obs.notify(d)
 
+    @staticmethod
+    def upd(func):
+        def wrapper(self, *args, **kwargs):
+            f = func(self, *args, **kwargs)
+            self.update()
+            return f
+
+        return wrapper
+
     @property
     def mode(self):
         return self._mode
@@ -414,11 +424,13 @@ class ModelDefault(ModelBase, ObservableBaseMixin):
         self._mode = new_mode
 
     @property
+    @upd
     def str_sub_sys(self):
         # self.update() # after!
         return self._str_sub_sys
 
     @property
+    @upd
     def file_sub_sys(self):
         # self.update() # after!
         return self._file_sub_sys

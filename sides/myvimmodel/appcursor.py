@@ -34,7 +34,7 @@ class CursorCursesDefault(CursorBase):
 
     def move(self, y, x):
         len_buf = len(self._model.buffer)
-        print(f"=== {len_buf} ===")
+
         if y < 0 or y > len_buf - 1:
             return None
 

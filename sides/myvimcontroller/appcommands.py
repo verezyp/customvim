@@ -50,7 +50,43 @@ class InsertEnterDefault(CommandBase):
 
     def exec(self):
         self._model.str_sub_sys.insert_new(self._row, self._col, "\n")
+        self._cursor.move(self._row + 1, self._col)
 
+    def undo(self):
+        pass
+
+
+class ScreenDownDefault(CommandBase):
+    def __init__(self, model: ModelBase, cursor: CursorBase):
+        self._row, self._col = cursor.get_pos()
+        self._model = model
+        self._cursor = cursor
+
+    def exec(self):
+        n = 30
+        if len(self._model.buffer) - self._row < 30:
+            n = len(self._model.buffer) - self._row - 1
+
+        self._cursor.move(self._row + n, self._col)
+
+    def undo(self):
+        pass
+
+
+class ScreenUpDefault(CommandBase):
+    def __init__(self, model: ModelBase, cursor: CursorBase):
+        self._row, self._col = cursor.get_pos()
+        self._model = model
+        self._cursor = cursor
+
+    def exec(self):
+        n = 30
+
+        # if self._row - 30 < 0:
+        #     n = -1 * (self._row - 30) - 1
+
+        self._cursor.move(self._row - n, self._col)
+        # self._cursor.move(self._row + 50, self._col)
 
     def undo(self):
         pass

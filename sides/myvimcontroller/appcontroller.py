@@ -68,8 +68,7 @@ class NaviModeController(AnyModeControllerBase):
     def handle(self, key: int, sbm: StatusBarModel):
         self._executor_inst.tmp()
         key = chr(key)
-        if sbm.tmp_str == "":
-            return
+
         match sbm.tmp_str:
             case "^" | "0":
                 self._executor_inst.push_and_exec(
@@ -109,6 +108,7 @@ class NaviModeController(AnyModeControllerBase):
                     PasteCurPos(self._cursor_inst, self._model_inst, self._clipboard))
                 sbm.tmp_str = ""
             case _:
+
                 if key == "G":
                     if sbm.tmp_str[: len(sbm.tmp_str) - 1].isdigit():
                         num = int(sbm.tmp_str[: len(sbm.tmp_str) - 1])
@@ -119,10 +119,12 @@ class NaviModeController(AnyModeControllerBase):
                     self._executor_inst.push_and_exec(
                         ReplaceDefault(sbm.tmp_str[1], self._cursor_inst, self._model_inst))
                     sbm.tmp_str = ""
-                elif key == 338:  # PGDOWN
-                    pass
-                elif key == 339:  # PGUP
-                    pass
+                elif ord(key) == 338:  # PGDOWN
+                    self._executor_inst.push_and_exec((ScreenDownDefault(self._model_inst, self._cursor_inst)))
+                    sbm.tmp_str = ""
+                elif ord(key) == 339:  # PGUP
+                    self._executor_inst.push_and_exec((ScreenUpDefault(self._model_inst, self._cursor_inst)))
+                    sbm.tmp_str = ""
                 else:
                     allowed = ["g", "d", "di", "y", "p", "r"]
                     if not (sbm.tmp_str in allowed or sbm.tmp_str.isdigit()):
@@ -181,11 +183,50 @@ class InputModeController(AnyModeControllerBase):
 
 
 class SearchModeController(AnyModeControllerBase):
-    def __init__(self):
+    _last_search: SearchStrFromCurTo
+    _last_search_rev: SearchStrFromCurTo
+
+    def __init__(self, model: ModelBase, cursor: CursorBase):
         super().__init__()
+        self._model_inst = model
+        self._cursor_inst = cursor
+        self._state = 0
 
     def handle(self, key: int, sbm: StatusBarModel):
-        self._executor_inst.tmp()
+        if key == 10:  # ENTER
+            match sbm.tmp_str[0]:
+                case "/":
+                    com = SearchStrFromCurTo("BOT", sbm.tmp_str[1:], self._cursor_inst,
+                                             self._model_inst)
+
+                    self._last_search = com
+                    self._last_search_rev = SearchStrFromCurTo("TOP", sbm.tmp_str[1:], self._cursor_inst,
+                                                               self._model_inst)
+                    self._executor_inst.push_and_exec(com)
+                    sbm.tmp_str = ""
+
+                case "?":
+                    com = SearchStrFromCurTo("TOP", sbm.tmp_str[1:], self._cursor_inst,
+                                             self._model_inst)
+                    self._last_search = com
+
+                    self._last_search_rev = SearchStrFromCurTo("BOT", sbm.tmp_str[1:], self._cursor_inst,
+                                                               self._model_inst)
+                    self._executor_inst.push_and_exec(com)
+                    sbm.tmp_str = ""
+
+                case "n":
+                    if self._last_search:
+                        self._executor_inst.push_and_exec(self._last_search)
+                        sbm.tmp_str = ""
+                case "N":
+                    if self._last_search_rev:
+                        self._executor_inst.push_and_exec(self._last_search_rev)
+                        sbm.tmp_str = ""
+                case _:
+                    sbm.tmp_str = ""
+        elif sbm.tmp_str and sbm.tmp_str[0] not in "/?nN":
+            sbm.tmp_str = ""
 
 
 class CommandModeController(AnyModeControllerBase):
@@ -193,7 +234,7 @@ class CommandModeController(AnyModeControllerBase):
         super().__init__()
 
     def handle(self, key: int, tmp_str: str):
-        self._executor_inst.tmp()
+        pass
 
 
 class ControllerDefault(ControllerBase):
@@ -221,9 +262,11 @@ class ControllerDefault(ControllerBase):
         self._model_inst.registry(v2)
         self._mode_state_list = {"NAVI": NaviModeController(model, self._cursor_inst, self._clipboard),
                                  "INPUT": InputModeController(model, self._cursor_inst),
-                                 "SEARCH": SearchModeController(), "COMMAND": CommandModeController()}
+                                 "SEARCH": SearchModeController(model, self._cursor_inst),
+                                 "COMMAND": CommandModeController()}
         self._current_mode_state = self._mode_state_list["NAVI"]
         self._tmp_str = ""
+        #   self._cursor_inst.move(120, 1)
 
     def navi_handle(self, key):
         # print(chr(key))
@@ -358,7 +401,7 @@ class ControllerDefault(ControllerBase):
             self._tmp_str = ""
             self._mode_state_list["INPUT"].reset_state()
 
-        elif self._mode == "NAVI" and (key == ord('/') or key == ord('?')):
+        elif self._mode == "NAVI" and chr(key) in "/?nN":
             self._mode = "SEARCH"
             self._sbm.mode = self._mode
             # print('///')
@@ -387,6 +430,14 @@ class ControllerDefault(ControllerBase):
         if self._to_exec:
             self._to_exec.pop().exec()
 
+    def status_str_handle(self, key):
+        if self.validate_symbol(key):
+            self._sbm.tmp_str += chr(key)
+
+        if self._mode != "INPUT":
+            if key == 8:
+                self._sbm.tmp_str = self._sbm.tmp_str[:-1]
+
     def process(self) -> None:
 
         key = self._view_inst.text_module.getch()
@@ -394,8 +445,14 @@ class ControllerDefault(ControllerBase):
         if self.cursor_movement(key):
             return None
 
-        if self.validate_symbol(key):
-            self._sbm.tmp_str += chr(key)
+        self.status_str_handle(key)
+
+        # if self.validate_symbol(key):
+        #     self._sbm.tmp_str += chr(key)
+        #
+        # if self._mode != "INPUT":
+        #     if key == 8:
+        #         self._sbm.tmp_str = self._sbm.tmp_str[:-1]
 
         self.mode_handle(key)
 
