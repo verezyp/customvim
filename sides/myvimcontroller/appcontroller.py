@@ -111,6 +111,9 @@ class NaviModeController(AnyModeControllerBase):
                 self._executor_inst.push_and_exec(
                     CancelStrAdditional(self._model_inst, self._cursor_inst))
                 sbm.tmp_str = ""
+            case "x":
+                self._executor_inst.push_and_exec(EraseCharDefault(self._model_inst, self._cursor_inst))
+                sbm.tmp_str = ""
             case _:
 
                 if key == "G":
@@ -234,10 +237,11 @@ class SearchModeController(AnyModeControllerBase):
 
 
 class CommandModeController(AnyModeControllerBase):
-    def __init__(self, model: ModelBase, cursor: CursorBase):
+    def __init__(self, model: ModelBase, cursor: CursorBase, view: ViewBase):
         super().__init__()
         self._model_inst = model
         self._cursor_inst = cursor
+        self._view_inst = view
 
     def handle(self, key: int, sbm: StatusBarModel):
         if sbm.tmp_str and sbm.tmp_str[0] == ":" and key == 10:
@@ -259,9 +263,12 @@ class CommandModeController(AnyModeControllerBase):
                     sbm.tmp_str = ""
 
                 case "h":
-                    pass
+                    self._executor_inst.push_and_exec(DisplayHelpInfoDefault(self._view_inst))
+                    sbm.tmp_str = ""
+
                 case "sy":
                     pass
+
                 case "e!":
                     self._executor_inst.push_and_exec(CancelAllAdditional(self._model_inst, self._cursor_inst))
                     sbm.tmp_str = ""
@@ -278,6 +285,10 @@ class CommandModeController(AnyModeControllerBase):
                         elif sbm.tmp_str[1:].isdigit():
                             self._executor_inst.push_and_exec(
                                 CursorMoveToNDefault(int(sbm.tmp_str[1:]), self._cursor_inst, self._model_inst))
+                            sbm.tmp_str = ""
+                        elif sbm.tmp_str[1:] == "set num":
+                            self._executor_inst.push_and_exec(
+                                SetNumAdditional(sbm, self._cursor_inst))
                             sbm.tmp_str = ""
 
 
@@ -301,13 +312,14 @@ class ControllerDefault(ControllerBase):
         self._cursor_inst = self._view_inst.cursor
         self._sbm = StatusBarModel(model.filename)
         self._sbm.registry(v2)
+        self._sbm.registry(self._cursor_inst)
         self._cursor_inst.registry(v2)
         self._cursor_inst.registry(view)
         self._model_inst.registry(v2)
         self._mode_state_list = {"NAVI": NaviModeController(model, self._cursor_inst, self._clipboard),
                                  "INPUT": InputModeController(model, self._cursor_inst),
                                  "SEARCH": SearchModeController(model, self._cursor_inst),
-                                 "COMMAND": CommandModeController(model, self._cursor_inst)}
+                                 "COMMAND": CommandModeController(model, self._cursor_inst, self._view_inst)}
         self._current_mode_state = self._mode_state_list["NAVI"]
         self._tmp_str = ""
         #   self._cursor_inst.move(120, 1)

@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
-from vimmodules.sides.myvimmodel.appmodel import ModelBase
+from vimmodules.sides.myvimmodel.appmodel import ModelBase, StatusBarModel
 from vimmodules.sides.myvimview.appview import CursorBase
 from vimmodules.sides.myvimmodel.appclipmod import ClipBoardBase
+from vimmodules.sides.myvimview.appview import ViewBase
 
 '''
 
@@ -67,7 +68,7 @@ class ScreenDownDefault(CommandBase):
         if len(self._model.buffer) - self._row < 30:
             n = len(self._model.buffer) - self._row - 1
 
-        self._cursor.move(self._row + n, self._col)
+        self._cursor.Cu(self._row + n, self._col)
 
     def undo(self):
         pass
@@ -277,6 +278,8 @@ class CursorMoveOneDefault(CommandBase):  # RIGHT LEFT UP DOWN
 
     def exec(self):
         cur_pos_y, cur_pos_x = self._cursor_inst.get_pos()
+        # if self._sbm.set_num == 1:
+        #     cur_pos_x += 2
         match self._dir:
             case "LEFT":
                 cur_pos_x -= 1
@@ -452,6 +455,21 @@ class OpenFilenameDefault(CommandBase):
         pass
 
 
+class DisplayHelpInfoDefault(CommandBase):
+    def __init__(self, view: ViewBase):
+        self._view = view
+
+    def exec(self):
+        self._view.help_state = 1
+        self._view.display()
+        if self._view.text_module.getch():
+            self._view.help_state = 0
+            self._view.display()
+
+    def undo(self):
+        pass
+
+
 class CancelAllAdditional(CommandBase):
     def __init__(self, model: ModelBase, cursor: CursorBase):
         self._model = model
@@ -480,3 +498,30 @@ class CancelStrAdditional(CommandBase):
 
     def undo(self):
         pass
+
+
+class SetNumAdditional(CommandBase):
+    def __init__(self, sbm: StatusBarModel, cursor: CursorBase):
+        self._model = sbm
+        self._cursor = cursor
+
+    def exec(self):
+
+        if self._model.set_num == 0:
+
+            y, x = self._cursor.get_pos()
+            if x < 2:
+                self._cursor.move(y, 2 - x)
+
+            self._model.set_num = 1
+        elif self._model.set_num == 1:
+
+            y, x = self._cursor.get_pos()
+            if x > 2:
+                self._cursor.move(y, x - 2)
+
+            self._model.set_num = 1
+        self._model.update()
+
+    def undo(self):
+        self._model.set_num = 0

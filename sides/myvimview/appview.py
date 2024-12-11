@@ -33,6 +33,16 @@ class ViewBase(ABC):
 
     @property
     @abstractmethod
+    def help_state(self):
+        pass
+
+    @help_state.setter
+    @abstractmethod
+    def help_state(self, val):
+        pass
+
+    @property
+    @abstractmethod
     def cursor(self) -> CursorBase:
         pass
 
@@ -48,10 +58,17 @@ class CursorCursesDefault(CursorBase, ObservableBaseMixin, ObserverBase):
         self._screen_x = 0
         self._screen_y = 0
         self._top_line = 0
+        self._set_num = 0
 
     def notify(self, arg_dict):
-        if arg_dict["buffer"]:
+        if 'buffer' in arg_dict:
             self._buf_link = arg_dict["buffer"]
+        if 'setnum' in arg_dict:
+            if self._set_num == 0 and arg_dict["setnum"] == 1:
+                print("xxx =", self._x)
+            self._set_num = arg_dict["setnum"]
+
+            print(self._set_num == 1)
 
     def update(self):
         d = {'cur_y': self._y, 'cur_x': self._x, 'topline': self._top_line}
@@ -59,7 +76,10 @@ class CursorCursesDefault(CursorBase, ObservableBaseMixin, ObserverBase):
             obs.notify(d)
 
     def get_pos(self):
-        return self._y, self._x
+        return self._y, self._x - 2 * self._set_num
+
+    def get_pos2(self):
+        return self._y, self._x - 2 * self._set_num
 
     def set_pos(self, y, x):
         self._y, self._x = y, x
@@ -97,21 +117,27 @@ class CursorCursesDefault(CursorBase, ObservableBaseMixin, ObserverBase):
 
     def move(self, y, x):
         len_buf = len(self._model.buffer)
-
+        x = x + 2 * self._set_num
         if y < 0 or y > len_buf - 1:
             return None
 
         len_str = len(self._model.get_str(y)) - 1
 
+        l_edge = 0
+        if self._set_num:
+            l_edge = 2
+
+        if l_edge > x > 0:
+            x = 2
         if x < 0:
             return None
 
         if x > len_str:
             x = len_str
-
+        self._x = self._x
         self._y = y
         self._x = x
-
+        print(x)
         if y < self._top_line:
             self._top_line = y
         elif y >= self._top_line + 28:
@@ -130,12 +156,17 @@ from vimmodules.sides.myvimmodel.appmodel import ObserverBase
 
 
 class ViewStatusBar(ViewBase, ObserverBase):  # subs to StatBarModel, CursorModel, CoreModel
+
     _buf = [None, "pp", 0, 0, None]
 
     def __init__(self, text_mod: ITextModule):
         self._text_module = text_mod
         self._win = curses.newwin(1, 120, 30 - 1, 0)
         self.screen_configure()
+
+    @property
+    def help_state(self):
+        return None
 
     def notify(self, arg_dict: dict):
         if 'filename' in arg_dict:
@@ -217,6 +248,16 @@ class ViewDefault(ViewBase, ObserverBase):
         self._cursor_x = 0
         self._cursor_y = 0
         self._top = 0
+        self._help_state = 0
+        self._set_num = 0
+
+    @property
+    def help_state(self):
+        return self._help_state
+
+    @help_state.setter
+    def help_state(self, val):
+        self._help_state = val
 
     def notify(self, args_dict):
         if "cur_x" in args_dict:
@@ -225,6 +266,8 @@ class ViewDefault(ViewBase, ObserverBase):
             self._cursor_y = args_dict["cur_y"]
         if "topline" in args_dict:
             self._top = args_dict["topline"]
+        if "setnum" in args_dict:
+            self._set_num = args_dict["setnum"]
 
     @property
     def text_module(self):
@@ -276,32 +319,49 @@ class ViewDefault(ViewBase, ObserverBase):
         stdscr = self._text_module
         max_y, max_x = stdscr.getmaxyx()
         win2 = curses.newwin(max_y - 1, max_x - 1, 0, 0)
-        cursor_y, cursor_x = self._cursor_inst.get_pos()
         top_line = self._top
         main_text = []
-        buf_size = len(self._model_inst.buffer)
-        for i in range(len(self._model_inst.buffer)):
-            main_text.append(self._model_inst.get_str(i))
-            # print(self._model_inst.get_str(i))
-        # if buf_size < self._scr_bot_str:
-        #     self._scr_bot_str = buf_size - 1
+        help_buffer = ["i Ввод текста перед курсором",
+                       "I Перейти в начало строки и начать ввод текста",
+                       "A Перейти в конец строки и начать ввод текста",
+                       "S Удалить содержимое строки и начать ввод текста",
+                       "r Заменить один символ под курсором",
+                       "^/0 Перемещение курсора в начало строки",
+                       "$ Перемещение курсора в конец строки",
+                       "w Перемещение курсора в конец слова справа от курсора ",
+                       "b Перемещение курсора в начало слова слева от курсора ",
+                       "gg Перейти в начало файла",
+                       "G Перейти в конец файла",
+                       "NG Перейти на строку с номером N",
+                       "PG_UP Перейти на экран вверх",
+                       "PG_DOWN Перейти на экран вниз",
+                       "x Заменить один символ под курсором",
+                       "diw Удалить слово под курсором, включая пробел справа",
+                       "dd Вырезать текущую строку",
+                       "yy Копировать текущую строку",
+                       "yw Копировать слово под курсором",
+                       "p Вставить после курсора",
+                       "/text Поиск строки text от курсора до конца файла",
+                       "?text Поиск строки text от курсора до начала файла",
+                       "n Повторить поиск",
+                       "N Повторить поиск в обратном направлении"
+                       ]
+        if self._help_state == 0:
+            for i in range(len(self._model_inst.buffer)):
+                main_text.append(self._model_inst.get_str(i))
+        else:
+            main_text = help_buffer
+
         win2.clear()
         i = 0
-        # if main_text[181]:
-        #     print("+++++++++++++++++++++++++++++++++===")
-        # print(main_text.index(main_text[-1]))
         for line in main_text[top_line:top_line + 28]:
-            win2.addstr(i, 0, str(i) + " " + line)
+            if self._set_num:
+                win2.addstr(i, 0, str(i) + " " + line)
+            else:
+                win2.addstr(i, 0, line)
             i += 1
 
-
-        max_y, max_x = stdscr.getmaxyx()
-
-        # for idx, line in enumerate(main_text):
-        #     if idx >= max_y - 1:
-        #         break
-        #     win2.addstr(idx, 0, line[:max_x - 1])
-        # stdscr.add_str(idx, 0, line[:max_x - 1])
-
         win2.refresh()
-        # stdscr.refresh_scr()
+        # if self._help_state == 1:
+        #     if win2.getch():
+        #         self._help_state = 0

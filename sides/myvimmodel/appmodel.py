@@ -487,18 +487,27 @@ class StatusBarModel(ObservableBaseMixin, ObserverBase):
     _filename: str = None
     _mode: str = "NAVI"
     _tmp_str: str = ""
+    _set_num: int = 0
 
     def __init__(self, file):
         super().__init__()
         self._filename = file
 
     def update(self):
-        d = {"filename": self._filename, "mode": self._mode, "tmp_str": self._tmp_str}
+        d = {"filename": self._filename, "mode": self._mode, "tmp_str": self._tmp_str, "setnum": self._set_num}
         for obs in self._obs_list:
             obs.notify(d)
 
     def notify(self, *args, **kwargs):
         pass
+
+    @property
+    def set_num(self):
+        return self._set_num
+
+    @set_num.setter
+    def set_num(self, val):
+        self._set_num = val
 
     def registry(self, obj: ObserverBase):
         super().registry(obj)
