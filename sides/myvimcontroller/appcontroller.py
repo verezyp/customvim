@@ -267,8 +267,8 @@ class CommandModeController(AnyModeControllerBase):
                     sbm.tmp_str = ""
 
                 case "sy":
-                    pass
-
+                    self._executor_inst.push_and_exec(DisplaySyntaxAdditional(self._view_inst))
+                    sbm.tmp_str = ""
                 case "e!":
                     self._executor_inst.push_and_exec(CancelAllAdditional(self._model_inst, self._cursor_inst))
                     sbm.tmp_str = ""
@@ -497,12 +497,19 @@ class ControllerDefault(ControllerBase):
     def process(self) -> None:
 
         key = self._view_inst.text_module.getch()
-
+        print(id(self._view_inst))
         if self.cursor_movement(key):
             return None
 
+        if key == ord('4'):
+            v = self._view_inst
+            self._view_inst = ViewDecoratorDefault(v)
+            print(id(self._view_inst))
+            self._view_inst.display()
+
         self.status_str_handle(key)
 
+        # self._view_inst.display()
         # if self.validate_symbol(key):
         #     self._sbm.tmp_str += chr(key)
         #

@@ -56,6 +56,7 @@ class AppDefault(AppBase):
         self._controller = None
         self._filename = None
         self._view_stat_bar = None
+        self._view_deco = None
         # v =
 
     @property
@@ -91,8 +92,9 @@ class AppDefault(AppBase):
         self._controller = inst
 
     def run(self):
+        d = ViewDecoratorDefault(self._view)
         while True:
-            self._view.display()
+            self._view_deco.display()
             self._view_stat_bar.display()
             self.controller.process()
 
@@ -114,5 +116,6 @@ class AppBuilderDefault(AppBuilderBase):
         app.model = ModelDefault(f_name)
         app.view = ViewDefault(app.model)
         app._view_stat_bar = v
-        app.controller = ControllerDefault(app.model, app.view, v)
+        app._view_deco = ViewDecoratorDefault(app.view)
+        app.controller = ControllerDefault(app.model, app._view_deco, v)
         return app

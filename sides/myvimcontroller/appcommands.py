@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from vimmodules.sides.myvimmodel.appmodel import ModelBase, StatusBarModel
 from vimmodules.sides.myvimview.appview import CursorBase
 from vimmodules.sides.myvimmodel.appclipmod import ClipBoardBase
-from vimmodules.sides.myvimview.appview import ViewBase
+from vimmodules.sides.myvimview.appview import ViewBase, ViewDecoratorBase
 
 '''
 
@@ -510,18 +510,30 @@ class SetNumAdditional(CommandBase):
         if self._model.set_num == 0:
 
             y, x = self._cursor.get_pos()
-            if x < 2:
-                self._cursor.move(y, 2 - x)
+            if x < 5:
+                self._cursor.move(y, 5 - x)
 
             self._model.set_num = 1
         elif self._model.set_num == 1:
 
             y, x = self._cursor.get_pos()
-            if x > 2:
-                self._cursor.move(y, x - 2)
 
-            self._model.set_num = 1
+            self._model.set_num = 0
+            self._model.update()
+            self._cursor.move(y, x)
+
         self._model.update()
 
     def undo(self):
         self._model.set_num = 0
+
+
+class DisplaySyntaxAdditional(CommandBase):
+    def __init__(self, view: ViewDecoratorBase):
+        self._view = view
+
+    def exec(self):
+        self._view.state = not self._view.state
+
+    def undo(self):
+        self.exec()

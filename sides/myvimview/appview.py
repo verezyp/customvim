@@ -59,16 +59,13 @@ class CursorCursesDefault(CursorBase, ObservableBaseMixin, ObserverBase):
         self._screen_y = 0
         self._top_line = 0
         self._set_num = 0
+        self._set_num_shift = 5
 
     def notify(self, arg_dict):
         if 'buffer' in arg_dict:
             self._buf_link = arg_dict["buffer"]
         if 'setnum' in arg_dict:
-            if self._set_num == 0 and arg_dict["setnum"] == 1:
-                print("xxx =", self._x)
             self._set_num = arg_dict["setnum"]
-
-            print(self._set_num == 1)
 
     def update(self):
         d = {'cur_y': self._y, 'cur_x': self._x, 'topline': self._top_line}
@@ -76,7 +73,7 @@ class CursorCursesDefault(CursorBase, ObservableBaseMixin, ObserverBase):
             obs.notify(d)
 
     def get_pos(self):
-        return self._y, self._x - 2 * self._set_num
+        return self._y, self._x - self._set_num_shift * self._set_num
 
     def get_pos2(self):
         return self._y, self._x - 2 * self._set_num
@@ -117,7 +114,7 @@ class CursorCursesDefault(CursorBase, ObservableBaseMixin, ObserverBase):
 
     def move(self, y, x):
         len_buf = len(self._model.buffer)
-        x = x + 2 * self._set_num
+        x = x + self._set_num_shift * self._set_num
         if y < 0 or y > len_buf - 1:
             return None
 
@@ -125,10 +122,10 @@ class CursorCursesDefault(CursorBase, ObservableBaseMixin, ObserverBase):
 
         l_edge = 0
         if self._set_num:
-            l_edge = 2
+            l_edge = self._set_num_shift
 
         if l_edge > x > 0:
-            x = 2
+            x = self._set_num_shift
         if x < 0:
             return None
 
@@ -231,6 +228,83 @@ class ViewStatusBar(ViewBase, ObserverBase):  # subs to StatBarModel, CursorMode
         pass
 
 
+class ViewDecoratorBase(ViewBase):
+    def display(self):
+        pass
+
+    @property
+    def state(self):
+        return self._state
+
+    @state.setter
+    def state(self, val):
+        self._state = val
+
+    @property
+    def text_module(self) -> ITextModule:
+        return self.component.text_module
+
+    @property
+    def help_state(self):
+        return self.component.help_state
+
+    @property
+    def cursor(self) -> CursorBase:
+        return self.component.cursor
+
+    _component: ViewBase = None
+
+    def __init__(self, component: ViewBase) -> None:
+        self._component = component
+        self._state = 0
+
+    @property
+    def component(self) -> ViewBase:
+        return self._component
+
+
+class ViewDecoratorDefault(ViewDecoratorBase, ObserverBase):
+    def notify(self, *args, **kwargs):
+        return self.component.notify(*args, **kwargs)
+
+    def display(self):
+        m = self.component.display()
+
+        if self.state == 0:
+            return []
+
+        stdscr = self.component.text_module
+        max_y, max_x = stdscr.getmaxyx()
+        win2 = curses.newwin(max_y - 1, max_x - 1, 0, 0)
+        curses.start_color()
+        curses.init_pair(1, curses.COLOR_RED, curses.COLOR_BLACK)
+        curses.init_pair(2, curses.COLOR_WHITE, curses.COLOR_BLACK)
+        keywords = {"def", "class", "for", "in", "while", "if", "elif", "else", "raise", "async", "match", "pass",
+                    "continue", "break", "import"}
+        for i, line in enumerate(m):
+            x = 0
+            word = ""
+            for char in line:
+                if char.isspace() or char == ":":
+                    if word in keywords:
+                        win2.addstr(i, x - len(word), word, curses.color_pair(1))
+                    else:
+                        win2.addstr(i, x - len(word), word, curses.color_pair(2))
+                    word = ""
+                    win2.addstr(i, x, char)
+                    x += 1
+                else:
+                    word += char
+                    win2.addstr(i, x, char)
+                    x += 1
+
+            if word in keywords:
+                win2.addstr(i, x - len(word), word, curses.color_pair(1))
+            else:
+                win2.addstr(i, x - len(word), word, curses.color_pair(2))
+        win2.refresh()
+
+
 class ViewDefault(ViewBase, ObserverBase):
     _cursor_inst: CursorBase
     _text_module: ITextModule
@@ -302,20 +376,7 @@ class ViewDefault(ViewBase, ObserverBase):
             (ctypes.c_short * 4)(left, top, right, bottom)
         ))
 
-    def config(self):
-        cur_y, cur_x = self._cursor_y, self._cursor_x
-        top_edge, bot_edge = self._scr_top_str, self._scr_bot_str
-        if cur_y > bot_edge - 1:
-            bot_edge = cur_y
-            top_edge = bot_edge - 29
-        if cur_y < top_edge:
-            top_edge = cur_y
-            bot_edge = top_edge + 29
-        self._scr_top_str, self._scr_bot_str = top_edge, bot_edge
-        # print(cur_y, cur_x, self._scr_top_str, self._scr_bot_str)
-
     def display(self):  # 0 - 28 string + last - status_bar (set_console_size(120, 30))
-        # self.config()
         stdscr = self._text_module
         max_y, max_x = stdscr.getmaxyx()
         win2 = curses.newwin(max_y - 1, max_x - 1, 0, 0)
@@ -351,17 +412,22 @@ class ViewDefault(ViewBase, ObserverBase):
                 main_text.append(self._model_inst.get_str(i))
         else:
             main_text = help_buffer
-
         win2.clear()
         i = 0
+        mas = []
         for line in main_text[top_line:top_line + 28]:
             if self._set_num:
-                win2.addstr(i, 0, str(i) + " " + line)
+                win2.addstr(i, 0,
+                            str(i + top_line) + ((i + top_line) < 10) * " " + ((i + top_line) < 100) * " "
+                            + ((i + top_line) < 1000) * " " + " " + line)
+                mas.append(str(i + top_line) + ((i + top_line) < 10) * " " + ((i + top_line) < 100) * " "
+                           + ((i + top_line) < 1000) * " " + " " + line)
             else:
+                mas.append(line)
                 win2.addstr(i, 0, line)
             i += 1
-
         win2.refresh()
+        return mas
         # if self._help_state == 1:
         #     if win2.getch():
         #         self._help_state = 0
