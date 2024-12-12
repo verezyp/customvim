@@ -18,6 +18,7 @@ class ControllerBase(ABC):
 
 class Executor:
     _instance = None
+    _command_buffer: list[CommandBase]
 
     def __init__(self):
         self._command_buffer = []
@@ -32,17 +33,14 @@ class Executor:
         self._command_buffer.append(command)
 
     def undo_last(self):
-        pass
-
-    def undo_string_spec(self, num: int):
-        pass
-
-    def undo_all(self):
-        pass
-
-    def tmp(self):
-        pass
-        # print(id(self))
+        while True:
+            try:
+                command = self._command_buffer.pop()
+                res = command.undo()
+                if res is True:
+                    break
+            except IndexError:
+                break
 
 
 class AnyModeControllerBase(ABC):
@@ -66,7 +64,6 @@ class NaviModeController(AnyModeControllerBase):
         self._clipboard = clipboard
 
     def handle(self, key: int, sbm: StatusBarModel):
-        self._executor_inst.tmp()
         key = chr(key)
 
         match sbm.tmp_str:
@@ -114,8 +111,12 @@ class NaviModeController(AnyModeControllerBase):
             case "x":
                 self._executor_inst.push_and_exec(EraseCharDefault(self._model_inst, self._cursor_inst))
                 sbm.tmp_str = ""
-            case _:
 
+            case "u":
+                self._executor_inst.undo_last()
+                sbm.tmp_str = ""
+
+            case _:
                 if key == "G":
                     if sbm.tmp_str[: len(sbm.tmp_str) - 1].isdigit():
                         num = int(sbm.tmp_str[: len(sbm.tmp_str) - 1])
@@ -297,155 +298,33 @@ class ControllerDefault(ControllerBase):
     _view_inst: ViewBase
     _cursor_inst: CursorBase
     _mode: str = "NAVI"
-    _to_exec: list[CommandBase]
     _clipboard: ClipBoardBase
-    _last_search: CommandBase
     _current_mode_state: AnyModeControllerBase = None
     _mode_state_list: dict[str, AnyModeControllerBase]
 
-    def __init__(self, model: ModelBase, view: ViewBase, v2: ViewBase):
+    def __init__(self, model: ModelBase, view: ViewBase, v2: ViewBase, cursor: CursorBase, sbm: StatusBarModel,
+                 clipboard: ClipBoardBase):
         self._model_inst = model
         self._view_inst = view
         self._model_inst.mode = "NAVI"
-        self._to_exec = []
-        self._clipboard = ClipBoardPyperClip()
-        self._cursor_inst = self._view_inst.cursor
-        self._sbm = StatusBarModel(model.filename)
-        self._sbm.registry(v2)
-        self._sbm.registry(self._cursor_inst)
-        self._cursor_inst.registry(v2)
-        self._cursor_inst.registry(view)
-        self._model_inst.registry(v2)
+        self._clipboard = clipboard
+        self._cursor_inst = cursor
+        self._sbm = sbm
         self._mode_state_list = {"NAVI": NaviModeController(model, self._cursor_inst, self._clipboard),
                                  "INPUT": InputModeController(model, self._cursor_inst),
                                  "SEARCH": SearchModeController(model, self._cursor_inst),
                                  "COMMAND": CommandModeController(model, self._cursor_inst, self._view_inst)}
         self._current_mode_state = self._mode_state_list["NAVI"]
-        self._tmp_str = ""
-        #   self._cursor_inst.move(120, 1)
-
-    def navi_handle(self, key):
-        # print(chr(key))
-        match chr(key):
-
-            #  -- - -- INPUT  -- - --
-
-            case "i":
-                self._mode = "INPUT"
-            case "I":
-                self._mode = "INPUT"
-                self._to_exec.append(CursorMoveToStrSideDefault("START", self._view_inst.cursor, self._model_inst))
-            case "A":
-                self._mode = "INPUT"
-                self._to_exec.append(CursorMoveToStrSideDefault("END", self._view_inst.cursor, self._model_inst))
-            case "S":
-                self._mode = "INPUT"
-                self._to_exec.append(MakeEmptyDefault(self._model_inst, self._view_inst.cursor))
-            case "r":
-                key = self._view_inst.text_module.getch()
-                if self.validate_symbol(key):
-                    self._to_exec.append(ReplaceDefault(chr(key), self._view_inst.cursor, self._model_inst))
-
-            # -- - -- NAVIGATION -- - --
-
-            case "^" | "0":
-                self._to_exec.append(CursorMoveToStrSideDefault("START", self._view_inst.cursor, self._model_inst))
-            case "$":
-                self._to_exec.append(CursorMoveToStrSideDefault("END", self._view_inst.cursor, self._model_inst))
-            case "w":
-                self._to_exec.append(CursorMoveWordSideDefault("w", self._view_inst.cursor, self._model_inst))
-            case "b":
-                self._to_exec.append(CursorMoveWordSideDefault("b", self._view_inst.cursor, self._model_inst))
-            case "g":
-                key = self._view_inst.text_module.getch()
-                if self.validate_symbol(key) and chr(key) == "g":
-                    self._to_exec.append(CursorMoveToFileStartDefault(self._view_inst.cursor, self._model_inst))
-            case "G":
-                self._to_exec.append(CursorMoveToFileEndDefault(self._view_inst.cursor, self._model_inst))
-            case "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9":
-                number_str = chr(key)
-                while True:
-                    new_key = chr(self._view_inst.text_module.getch())
-                    if new_key in "0123456789":
-                        number_str = number_str + new_key
-                    elif new_key == "G":
-                        num = int(number_str)
-                        self._to_exec.append(CursorMoveToNDefault(num, self._view_inst.cursor, self._model_inst))
-                        break
-                    else:
-                        break
-            case "d":
-                new_key = chr(self._view_inst.text_module.getch())
-                if new_key == "d":
-                    self._to_exec.append(
-                        CutFullDefault(self._model_inst, self._view_inst.cursor,
-                                       self._clipboard))
-                elif new_key == "i":
-                    new_key2 = chr(self._view_inst.text_module.getch())
-                    if new_key2 == "w":
-                        self._to_exec.append(EraseDiwDefault(self._view_inst.cursor, self._model_inst))
-
-            case "y":
-                new_key = chr(self._view_inst.text_module.getch())
-                if new_key == "y":
-                    self._to_exec.append(
-                        CopyStrDefault(self._view_inst.cursor, self._model_inst, self._clipboard))
-                elif new_key == "w":
-                    self._to_exec.append(
-                        CopyWordCurPosDefault(self._view_inst.cursor, self._model_inst, self._clipboard))
-
-            case "p":
-                self._to_exec.append(PasteCurPos(self._view_inst.cursor, self._model_inst, self._clipboard))
-            case "n":
-                self._to_exec.append(self._last_search)
-            case "N":
-                dir = ""
-                if self._last_search.direction == "TOP":
-                    dir = "BOT"
-                elif self._last_search.direction == "BOT":
-                    dir = "TOP"
-                self._to_exec.append(
-                    SearchStrFromCurTo(dir, self._last_search.text, self._view_inst.cursor,
-                                       self._model_inst))
-                self._last_search = self._to_exec[-1]
-
-    def search_handle(self, key):
-
-        if not self.validate_symbol(key):
-            return None
-
-        text = ""
-
-        direction = ""
-        if chr(key) == "/":
-            direction = "BOT"
-        elif chr(key) == "?":
-            direction = "TOP"
-
-        while True:
-            new_key = (self._view_inst.text_module.getch())
-            # print(new_key)
-            if new_key == 10:
-                self._to_exec.append(
-                    SearchStrFromCurTo(direction, text, self._view_inst.cursor, self._model_inst))
-                self._last_search = self._to_exec[-1]
-                break
-
-            elif self.validate_symbol(new_key):
-                text += chr(new_key)
-
-            else:
-                break
 
     def cursor_movement(self, key):
         if key == KEY_UP:
-            CursorMoveOneDefault("UP", self._view_inst.cursor).exec()
+            CursorMoveOneDefault("UP", self._cursor_inst).exec()
         elif key == KEY_DOWN:
-            CursorMoveOneDefault("DOWN", self._view_inst.cursor).exec()
+            CursorMoveOneDefault("DOWN", self._cursor_inst).exec()
         elif key == KEY_LEFT:
-            CursorMoveOneDefault("LEFT", self._view_inst.cursor).exec()
+            CursorMoveOneDefault("LEFT", self._cursor_inst).exec()
         elif key == KEY_RIGHT:
-            CursorMoveOneDefault("RIGHT", self._view_inst.cursor).exec()
+            CursorMoveOneDefault("RIGHT", self._cursor_inst).exec()
         else:
             return 0
         return 1
@@ -482,10 +361,6 @@ class ControllerDefault(ControllerBase):
                   "[]asdfghjkl;'zxcvbnm,./QWERTYUIOP[]ASDFGHJKL;'ZXCVBNM,./<>,.?/;:'`ёЁ~/"
         return char in allowed
 
-    def execute(self):
-        if self._to_exec:
-            self._to_exec.pop().exec()
-
     def status_str_handle(self, key):
         if self.validate_symbol(key):
             self._sbm.tmp_str += chr(key)
@@ -497,25 +372,11 @@ class ControllerDefault(ControllerBase):
     def process(self) -> None:
 
         key = self._view_inst.text_module.getch()
-        print(id(self._view_inst))
+
         if self.cursor_movement(key):
             return None
 
-        if key == ord('4'):
-            v = self._view_inst
-            self._view_inst = ViewDecoratorDefault(v)
-            print(id(self._view_inst))
-            self._view_inst.display()
-
         self.status_str_handle(key)
-
-        # self._view_inst.display()
-        # if self.validate_symbol(key):
-        #     self._sbm.tmp_str += chr(key)
-        #
-        # if self._mode != "INPUT":
-        #     if key == 8:
-        #         self._sbm.tmp_str = self._sbm.tmp_str[:-1]
 
         self.mode_handle(key)
 

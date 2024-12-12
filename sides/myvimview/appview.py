@@ -59,7 +59,7 @@ class CursorCursesDefault(CursorBase, ObservableBaseMixin, ObserverBase):
         self._screen_y = 0
         self._top_line = 0
         self._set_num = 0
-        self._set_num_shift = 5
+        self._set_num_shift = 6
 
     def notify(self, arg_dict):
         if 'buffer' in arg_dict:
@@ -75,42 +75,8 @@ class CursorCursesDefault(CursorBase, ObservableBaseMixin, ObserverBase):
     def get_pos(self):
         return self._y, self._x - self._set_num_shift * self._set_num
 
-    def get_pos2(self):
-        return self._y, self._x - 2 * self._set_num
-
     def set_pos(self, y, x):
         self._y, self._x = y, x
-
-    def _scaling(self):  # 0:27 --> == ; 27 + --> =
-        abs_y, abs_x = self._y, self._x
-        sc_y, sc_x = self._screen_y, self._screen_x
-        t_y, t_x = self._inst.getyx()
-
-        # print(f"pre: abs = {abs_y}, t_y = {t_y}, sc_y = {sc_y}")
-
-        if t_y > 22:
-            sc_y = sc_y
-        else:
-            sc_y = abs_y % 28
-
-        # if t_y == 27 and abs_y > 27:
-        #     sc_y = 27
-        # else:
-        #     sc_y = abs_y % 28
-        # print(f"aft: abs = {abs_y}, t_y = {t_y}, sc_y = {sc_y}")
-        # # print(t_y)
-        # if abs_y <= 26:
-        #     sc_y = abs_y
-        # elif abs_y >= 27:
-        #     if t_y == 27:
-        #         sc_y = 27
-        #         print("OWEOOOEOEO")
-        #     else:
-        #         sc_y = abs_y % 29
-        self._screen_y, self._screen_x = sc_y, sc_x
-
-    def s2(self):
-        pass
 
     def move(self, y, x):
         len_buf = len(self._model.buffer)
@@ -215,6 +181,7 @@ class ViewStatusBar(ViewBase, ObserverBase):  # subs to StatBarModel, CursorMode
             status_bar = f"FILE: {file}. MODE: {mode}. CUR_STR: {cursor_y}. AMOUNT: {amount}."
         else:
             status_bar = f"FILE: {file}. MODE: {mode}. CUR_STR: {cursor_y}. AMOUNT: {amount}. |{self._buf[4]}"
+
         self._win.refresh()
         self._win.addstr(0, 0, status_bar[:max_x - 1])
         self._win.refresh()
@@ -248,6 +215,10 @@ class ViewDecoratorBase(ViewBase):
     def help_state(self):
         return self.component.help_state
 
+    @help_state.setter
+    def help_state(self, val):
+        self.component.help_state = val
+
     @property
     def cursor(self) -> CursorBase:
         return self.component.cursor
@@ -269,40 +240,40 @@ class ViewDecoratorDefault(ViewDecoratorBase, ObserverBase):
 
     def display(self):
         m = self.component.display()
-
+        module = self.component.text_module
         if self.state == 0:
             return []
 
         stdscr = self.component.text_module
         max_y, max_x = stdscr.getmaxyx()
-        win2 = curses.newwin(max_y - 1, max_x - 1, 0, 0)
-        curses.start_color()
-        curses.init_pair(1, curses.COLOR_RED, curses.COLOR_BLACK)
-        curses.init_pair(2, curses.COLOR_WHITE, curses.COLOR_BLACK)
+        win2 = module.newwin(max_y - 1, max_x - 1, 0, 0)
+        module.start_color()
+        module.init_pair(1, "RED", "BLACK")
+        module.init_pair(2, "WHITE", "BLACK")
         keywords = {"def", "class", "for", "in", "while", "if", "elif", "else", "raise", "async", "match", "pass",
-                    "continue", "break", "import"}
+                    "continue", "yield", "break", "import", "from"}
         for i, line in enumerate(m):
             x = 0
             word = ""
             for char in line:
                 if char.isspace() or char == ":":
                     if word in keywords:
-                        win2.addstr(i, x - len(word), word, curses.color_pair(1))
+                        module.win_addstr(i, x - len(word), word, win2, 1)
                     else:
-                        win2.addstr(i, x - len(word), word, curses.color_pair(2))
+                        module.win_addstr(i, x - len(word), word, win2, 2)
                     word = ""
-                    win2.addstr(i, x, char)
+                    module.win_addstr(i, x, char, win2)
                     x += 1
                 else:
                     word += char
-                    win2.addstr(i, x, char)
+                    module.win_addstr(i, x, char, win2)
                     x += 1
 
             if word in keywords:
-                win2.addstr(i, x - len(word), word, curses.color_pair(1))
+                module.win_addstr(i, x - len(word), word, win2, 1)
             else:
-                win2.addstr(i, x - len(word), word, curses.color_pair(2))
-        win2.refresh()
+                module.win_addstr(i, x - len(word), word, win2, 2)
+        module.win_refresh(win2)
 
 
 class ViewDefault(ViewBase, ObserverBase):
@@ -312,11 +283,11 @@ class ViewDefault(ViewBase, ObserverBase):
     _scr_top_str: int = 0
     _scr_bot_str: int = 29
 
-    def __init__(self, model: ModelBase):
+    def __init__(self, model: ModelBase, text_mod: ITextModule):
         mod = CursesTextModule()
-        self._text_module = mod
+        self._text_module = text_mod
         self._model_inst = model
-        # self._set_console_size(120, 30)
+        self._set_console_size(120, 30)
         self.screen_configure()
         self._cursor_inst = CursorCursesDefault(mod, model)
         self._cursor_x = 0
@@ -379,7 +350,7 @@ class ViewDefault(ViewBase, ObserverBase):
     def display(self):  # 0 - 28 string + last - status_bar (set_console_size(120, 30))
         stdscr = self._text_module
         max_y, max_x = stdscr.getmaxyx()
-        win2 = curses.newwin(max_y - 1, max_x - 1, 0, 0)
+        win2 = self._text_module.newwin(max_y - 1, max_x - 1, 0, 0)
         top_line = self._top
         main_text = []
         help_buffer = ["i Ввод текста перед курсором",
@@ -407,27 +378,32 @@ class ViewDefault(ViewBase, ObserverBase):
                        "n Повторить поиск",
                        "N Повторить поиск в обратном направлении"
                        ]
+        n = 28
+        if len(self._model_inst.buffer) < 28:
+            n = len(self._model_inst.buffer)
         if self._help_state == 0:
-            for i in range(len(self._model_inst.buffer)):
+            for i in range(top_line, top_line + n):
                 main_text.append(self._model_inst.get_str(i))
         else:
             main_text = help_buffer
-        win2.clear()
+        self._text_module.win_clear(win2)
+        # win2.clear()
         i = 0
         mas = []
-        for line in main_text[top_line:top_line + 28]:
+        for line in main_text:
             if self._set_num:
-                win2.addstr(i, 0,
-                            str(i + top_line) + ((i + top_line) < 10) * " " + ((i + top_line) < 100) * " "
-                            + ((i + top_line) < 1000) * " " + " " + line)
+                self._text_module.win_addstr(i, 0,
+                                             str(i + top_line) + ((i + top_line) < 10) * " " + (
+                                                     (i + top_line) < 100) * " "
+                                             + ((i + top_line) < 1000) * " " + (
+                                                     (i + top_line) < 10000) * " " + " " + line, win2)
                 mas.append(str(i + top_line) + ((i + top_line) < 10) * " " + ((i + top_line) < 100) * " "
-                           + ((i + top_line) < 1000) * " " + " " + line)
+                           + ((i + top_line) < 1000) * " " + ((i + top_line) < 10000) * " " + " " + line)
             else:
                 mas.append(line)
-                win2.addstr(i, 0, line)
+                self._text_module.win_addstr(i, 0, line, win2)
+                # win2.addstr(i, 0, line)
             i += 1
-        win2.refresh()
+        self._text_module.win_refresh(win2)
+        # win2.refresh()
         return mas
-        # if self._help_state == 1:
-        #     if win2.getch():
-        #         self._help_state = 0

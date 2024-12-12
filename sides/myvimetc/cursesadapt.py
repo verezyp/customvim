@@ -48,16 +48,72 @@ class ITextModule(ABC):
     def noecho(self):
         pass
 
+    @abstractmethod
     def getmaxyx(self):
+        pass
+
+    @abstractmethod
+    def start_config(self):
+        pass
+
+    @abstractmethod
+    def newwin(self, nlines, ncols, beg_y, beg_x):
+        pass
+
+    @abstractmethod
+    def win_clear(self, win):
+        pass
+
+    @abstractmethod
+    def win_refresh(self, win):
+        pass
+
+    @abstractmethod
+    def start_color(self):
+        pass
+
+    @abstractmethod
+    def init_pair(self, num, color1, color2):
+        pass
+
+    @abstractmethod
+    def win_addstr(self, y, x, s, win, color=None):
         pass
 
 
 class CursesTextModule(ITextModule):
+    def win_addstr(self, y, x, s, win, colornum=None):
+        if colornum is None:
+            win.addstr(y, x, s)
+        else:
+            win.addstr(y, x, s, curses.color_pair(colornum))
+
+    def start_color(self):
+        curses.start_color()
+
+    def init_pair(self, num, color1, color2):
+        if color1 == "RED":
+            curses.init_pair(num, curses.COLOR_RED, curses.COLOR_BLACK)
+        if color1 == "WHITE":
+            curses.init_pair(num, curses.COLOR_WHITE, curses.COLOR_BLACK)
+
     _scr = None
 
     def __init__(self):
         self._scr = curses.initscr()
 
+    def newwin(self, nlines, ncols, beg_y, beg_x):
+        return curses.newwin(nlines, ncols, beg_y, beg_x)
+
+    def win_clear(self, win):
+        win.clear()
+
+    def win_refresh(self, win):
+        win.refresh()
+
+    def start_config(self):
+        curses.noecho()
+        curses.cbreak()
 
     @property
     def screen(self):

@@ -16,7 +16,7 @@ class ClipBoardBase(ABC):
 class ClipBoardPyperClip(ClipBoardBase):
 
     def copy(self, in_str: str) -> None:
-        pyperclip.copy(in_str)
+        pyperclip.copy(in_str[:-1])
 
     def paste(self) -> str:
         return pyperclip.paste()

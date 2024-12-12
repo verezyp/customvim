@@ -92,10 +92,11 @@ class AppDefault(AppBase):
         self._controller = inst
 
     def run(self):
-        d = ViewDecoratorDefault(self._view)
         while True:
             self._view_deco.display()
+
             self._view_stat_bar.display()
+
             self.controller.process()
 
 
@@ -112,10 +113,35 @@ class AppBuilderDefault(AppBuilderBase):
 
     def create(self, f_name):
         app = AppDefault()
-        v = ViewStatusBar(CursesTextModule())
-        app.model = ModelDefault(f_name)
-        app.view = ViewDefault(app.model)
-        app._view_stat_bar = v
-        app._view_deco = ViewDecoratorDefault(app.view)
-        app.controller = ControllerDefault(app.model, app._view_deco, v)
+
+        model = ModelDefault(f_name)
+
+        text_module = CursesTextModule()
+
+        view = ViewDefault(model, text_module)
+
+        view_status_bar = ViewStatusBar(text_module)
+
+        clipboard = ClipBoardPyperClip()
+
+        stat_bar_model = StatusBarModel(f_name)
+
+        cursor = CursorCursesDefault(text_module, model)
+
+        deco = ViewDecoratorDefault(view)
+
+        stat_bar_model.registry(view_status_bar)
+        stat_bar_model.registry(cursor)
+        cursor.registry(view_status_bar)
+        cursor.registry(view)
+        model.registry(view_status_bar)
+
+        ctrl = ControllerDefault(model, deco, view_status_bar, cursor, stat_bar_model, clipboard)
+
+        app.model = model
+        app.view = view
+        app.controller = ctrl
+        app._view_stat_bar = view_status_bar
+        app._view_deco = deco
+
         return app

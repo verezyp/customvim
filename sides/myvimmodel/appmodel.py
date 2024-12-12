@@ -272,7 +272,8 @@ class ModelStrSubSystemDefault(ModelStrSubSystemBase):
         self._base.edited = True
 
     def make_empty(self, row):
-        self._base.buffer[row].erase(0, self._base.buffer[row].size() - 1)
+        if self._base.buffer[row].size() > 1:
+            self._base.buffer[row].erase(0, self._base.buffer[row].size() - 1)
         self._base.edited = True
 
     def erase_chr(self, row: int, col: int) -> None:
@@ -298,7 +299,7 @@ class ModelStrSubSystemDefault(ModelStrSubSystemBase):
             else:
                 break
 
-        dif = right_ind - left_ind + 1
+        dif = right_ind - left_ind
         s.erase(left_ind, dif)
         self._base.buffer[row] = s
         self._base.edited = True

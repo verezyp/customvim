@@ -33,13 +33,21 @@ class InsertDefault(CommandBase):
         self._val = val
         self._model = model
         self._cursor = cursor
+        self._backup = self._model.get_str(self._row)[:-1]
 
     def exec(self):
         self._model.str_sub_sys.insert_str(self._row, self._col, self._val)
         self._cursor.move(self._row, self._col + 1)
 
     def undo(self):
-        pass
+        # com = EraseCharDefault(self._model, self._cursor)
+        # com._row, com._col = self._row, self._col + 1
+        # print(f"e={self._model.get_str(self._row)}")
+        # com.exec()
+        self._model.str_sub_sys.make_empty(self._row)
+        self._model.str_sub_sys.insert_str(self._row, 0, self._backup)
+        self._cursor.move(self._row, self._col)
+        return True
 
 
 class InsertEnterDefault(CommandBase):
@@ -54,7 +62,12 @@ class InsertEnterDefault(CommandBase):
         self._cursor.move(self._row + 1, self._col)
 
     def undo(self):
-        pass
+        # cur str copy to str-1 on last pos and full erase cur
+        if self._model.get_str(self._row + 1) != "\n":
+            self._model.str_sub_sys.insert_str(self._row, len(self._model.get_str(self._row)) - 1,
+                                               self._model.get_str(self._row + 1))
+        self._model.str_sub_sys.erase_full_str(self._row + 1)
+        return True
 
 
 class ScreenDownDefault(CommandBase):
@@ -68,7 +81,7 @@ class ScreenDownDefault(CommandBase):
         if len(self._model.buffer) - self._row < 30:
             n = len(self._model.buffer) - self._row - 1
 
-        self._cursor.Cu(self._row + n, self._col)
+        self._cursor.move(self._row + n, self._col)
 
     def undo(self):
         pass
@@ -99,12 +112,15 @@ class ReplaceDefault(CommandBase):
         self._row, self._col = cursor.get_pos()
         self._chr = in_chr
         self._model = model
+        self._backup = self._model.get_str(self._row)[:-1]
 
     def exec(self):
         self._model.str_sub_sys.replace_chr(self._row, self._col, self._chr)
 
     def undo(self):
-        pass
+        self._model.str_sub_sys.make_empty(self._row)
+        self._model.str_sub_sys.insert_str(self._row, 0, self._backup)
+        return True
 
 
 class CutFullDefault(CommandBase):
@@ -114,14 +130,17 @@ class CutFullDefault(CommandBase):
         self._model = model
         self._cursor = cursor
         self._clipboard = clipboard
+        self._backup = self._model.get_str(self._row)[:-1]
 
     def exec(self):
         self._clipboard.copy(self._model.get_str(self._row))
         self._model.str_sub_sys.erase_full_str(self._row)
-        # self._model.str_sub_sys.insert_str(self._row, 0, "")
 
     def undo(self):
-        pass
+        self._model.str_sub_sys.insert_new(self._row, 0, "\n")
+        self._model.str_sub_sys.make_empty(self._row)
+        self._model.str_sub_sys.insert_str(self._row, 0, self._backup)
+        return True
 
 
 class MakeEmptyDefault(CommandBase):
@@ -145,6 +164,8 @@ class EraseCharDefault(CommandBase):
         self._row, self._col = cursor.get_pos()
         self._model = model
         self._cursor = cursor
+        self._backup = [self._model.get_str(self._row - 1)[:-1], self._model.get_str(self._row)[:-1]]
+        print("|||:", self._backup[1])
 
     def exec(self):
 
@@ -164,7 +185,14 @@ class EraseCharDefault(CommandBase):
             self._cursor.move(self._row, self._col - 1)
 
     def undo(self):
-        pass
+        print("^^^:", self._backup[1])
+        # self._model.str_sub_sys.make_empty(self._row - 1)
+        self._model.str_sub_sys.make_empty(self._row)
+        print(f"em={self._model.get_str(self._row)}|")
+        # self._model.str_sub_sys.insert_str(self._row - 1, 0, self._backup[0])
+        self._model.str_sub_sys.insert_str(self._row, 0, self._backup[1])
+        print(f"aft={self._model.get_str(self._row)}|")
+        return True
 
 
 class EraseDiwDefault(CommandBase):
@@ -172,12 +200,17 @@ class EraseDiwDefault(CommandBase):
     def __init__(self, cursor: CursorBase, model: ModelBase):
         self._row, self._col = cursor.get_pos()
         self._model = model
+        self._backup = self._model.get_str(self._row)[:-1]
 
     def exec(self):
         self._model.str_sub_sys.erase_word_diw_spec(self._row, self._col)
 
     def undo(self):
-        pass
+        print("@323")
+        self._model.str_sub_sys.make_empty(self._row)
+        print("eee")
+        self._model.str_sub_sys.insert_str(self._row, 0, self._backup)
+        return True
 
 
 class CopyStrDefault(CommandBase):
@@ -214,6 +247,7 @@ class PasteCurPos(CommandBase):
         self._clipboard = clipboard
         self._model = model
         self._cursor = cursor
+        self._backup = self._model.get_str(self._row)
 
     def exec(self):
         paste_val = self._clipboard.paste()
@@ -221,7 +255,9 @@ class PasteCurPos(CommandBase):
         self._cursor.move(self._row, len(paste_val) + 1)
 
     def undo(self):
-        pass
+        self._model.str_sub_sys.make_empty(self._row)
+        self._model.str_sub_sys.insert_str(self._row, 0, self._backup)
+        return True
 
 
 class LoadToFileDefault(CommandBase):
@@ -463,6 +499,7 @@ class DisplayHelpInfoDefault(CommandBase):
         self._view.help_state = 1
         self._view.display()
         if self._view.text_module.getch():
+            print("PWPWPWPP")
             self._view.help_state = 0
             self._view.display()
 
@@ -494,6 +531,7 @@ class CancelStrAdditional(CommandBase):
             return
 
         self._model.buffer[y] = self._model._backup[y]
+        self._cursor.move(y, 0)
         # self._cursor.move(0, 0)
 
     def undo(self):
@@ -508,28 +546,25 @@ class SetNumAdditional(CommandBase):
     def exec(self):
 
         if self._model.set_num == 0:
-
             y, x = self._cursor.get_pos()
-            if x < 5:
-                self._cursor.move(y, 5 - x)
-
+            if x < 6:
+                self._cursor.move(y, 6 - x)
             self._model.set_num = 1
+
         elif self._model.set_num == 1:
-
             y, x = self._cursor.get_pos()
-
             self._model.set_num = 0
             self._model.update()
             self._cursor.move(y, x)
-
         self._model.update()
 
     def undo(self):
-        self._model.set_num = 0
+        self.exec()
+        return True
 
 
 class DisplaySyntaxAdditional(CommandBase):
-    def __init__(self, view: ViewDecoratorBase):
+    def __init__(self, view: ViewBase):
         self._view = view
 
     def exec(self):
@@ -537,3 +572,4 @@ class DisplaySyntaxAdditional(CommandBase):
 
     def undo(self):
         self.exec()
+        return True
