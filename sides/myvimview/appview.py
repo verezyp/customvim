@@ -383,7 +383,10 @@ class ViewDefault(ViewBase, ObserverBase):
             n = len(self._model_inst.buffer)
         if self._help_state == 0:
             for i in range(top_line, top_line + n):
-                main_text.append(self._model_inst.get_str(i))
+                try:
+                    main_text.append(self._model_inst.get_str(i))
+                except Exception:
+                    pass
         else:
             main_text = help_buffer
         self._text_module.win_clear(win2)

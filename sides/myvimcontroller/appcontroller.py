@@ -122,6 +122,9 @@ class NaviModeController(AnyModeControllerBase):
                         num = int(sbm.tmp_str[: len(sbm.tmp_str) - 1])
                         self._executor_inst.push_and_exec(
                             CursorMoveToNDefault(num, self._cursor_inst, self._model_inst))
+                    elif sbm.tmp_str == "G":
+                        self._executor_inst.push_and_exec(
+                            CursorMoveToFileEndDefault(self._cursor_inst, self._model_inst))
                     sbm.tmp_str = ""
                 elif sbm.tmp_str and sbm.tmp_str[0] == 'r' and len(sbm.tmp_str) == 2:
                     self._executor_inst.push_and_exec(
@@ -379,6 +382,9 @@ class ControllerDefault(ControllerBase):
         self.status_str_handle(key)
 
         self.mode_handle(key)
+
+        if self._sbm.tmp_str == "dd":
+            pass
 
         self._current_mode_state.handle(key, self._sbm)
 
